@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#B91C1C"/>
+<title>FireHydrant — Points d'eau incendie</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --red: #B91C1C;
+    --red-dark: #991B1B;
+    --red-light: #FEE2E2;
+    --green: #15803D;
+    --green-light: #DCFCE7;
+    --orange: #D97706;
+    --orange-light: #FEF3C7;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+    --gray-400: #9CA3AF;
+    --gray-600: #4B5563;
+    --gray-800: #1F2937;
+    --gray-900: #111827;
+    --white: #FFFFFF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.15);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.2);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--gray-900); color: var(--gray-900); }
+
+  /* LAYOUT */
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  #header { background: var(--red); color: white; padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; box-shadow: var(--shadow-md); z-index: 100; position: relative; padding-top: max(10px, env(safe-area-inset-top)); }
+  #header h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; flex: 1; }
+  #header .subtitle { font-size: 11px; opacity: 0.8; margin-top: 1px; }
+  #header-icon { font-size: 26px; }
+  #count-badge { background: rgba(255,255,255,0.2); border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  #content { flex: 1; overflow: hidden; position: relative; }
+  #bottom-nav { background: var(--white); border-top: 1px solid var(--gray-200); display: flex; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 12px rgba(0,0,0,0.08); }
+  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 0 6px; border: none; background: transparent; color: var(--gray-400); font-size: 10px; gap: 3px; cursor: pointer; transition: color 0.2s; -webkit-tap-highlight-color: transparent; }
+  .nav-btn svg { width: 22px; height: 22px; stroke-width: 2; fill: none; stroke: currentColor; }
+  .nav-btn.active { color: var(--red); font-weight: 600; }
+  .nav-btn .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--red); opacity: 0; margin-top: 1px; }
+  .nav-btn.active .dot { opacity: 1; }
+
+  /* SCREENS */
+  .screen { position: absolute; inset: 0; overflow-y: auto; background: var(--gray-50); display: none; }
+  .screen.active { display: block; }
+  #screen-map { display: none; }
+  #screen-map.active { display: flex; flex-direction: column; }
+
+  /* MAP */
+  #map { flex: 1; z-index: 1; }
+  .leaflet-control-zoom { display: none; }
+
+  /* MAP OVERLAYS */
+  #map-toolbar { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
+  .map-tool-btn { width: 40px; height: 40px; background: var(--white); border: none; border-radius: var(--radius-sm); box-shadow: var(--shadow-md); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--gray-800); -webkit-tap-highlight-color: transparent; transition: transform 0.1s; }
+  .map-tool-btn:active { transform: scale(0.95); }
+  #legend { position: absolute; bottom: 10px; left: 10px; z-index: 500; background: rgba(255,255,255,0.95); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11px; color: var(--gray-600); display: flex; flex-direction: column; gap: 4px; box-shadow: var(--shadow-sm); }
+  .legend-row { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); flex-shrink: 0; }
+
+  /* BOTTOM SHEET */
+  #bottom-sheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 600; background: var(--white); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-lg); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); max-height: 70%; overflow-y: auto; }
+  #bottom-sheet.show { transform: translateY(0); }
+  .sheet-handle { width: 36px; height: 4px; background: var(--gray-200); border-radius: 2px; margin: 12px auto 16px; }
+  .sheet-content { padding: 0 16px 20px; }
+  .sheet-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .sheet-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .sheet-title { font-size: 16px; font-weight: 700; color: var(--gray-900); }
+  .sheet-sub { font-size: 13px; color: var(--gray-600); margin-top: 1px; }
+  .sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .sheet-field { background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px; }
+  .sheet-field label { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px; }
+  .sheet-field span { font-size: 15px; font-weight: 600; color: var(--gray-900); }
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .status-ok { background: var(--green-light); color: var(--green); }
+  .status-hs { background: var(--red-light); color: var(--red); }
+  .sheet-notes { background: var(--orange-light); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; color: #92400E; margin-bottom: 14px; display: none; }
+  .sheet-notes.show { display: block; }
+  .btn-primary { width: 100%; padding: 13px; background: var(--red); color: white; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent; transition: background 0.15s; }
+  .btn-primary:active { background: var(--red-dark); }
+  .btn-secondary { width: 100%; padding: 11px; background: var(--gray-100); color: var(--gray-800); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; -webkit-tap-highlight-color: transparent; }
+  .btn-danger { width: 100%; padding: 11px; background: var(--red-light); color: var(--red); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; -webkit-tap-highlight-color: transparent; }
+
+  /* NEAREST BANNER */
+  #nearest-banner { position: absolute; bottom: 0; left: 0; right: 0; z-index: 600; background: var(--white); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-lg); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); padding: 16px; }
+  #nearest-banner.show { transform: translateY(0); }
+  .nearest-label { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .nearest-name { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+  .nearest-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .chip { background: var(--gray-100); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--gray-800); font-weight: 500; }
+  .chip.green { background: var(--green-light); color: var(--green); }
+
+  /* ADD / EDIT SCREEN */
+  .form-wrap { padding: 16px; }
+  .form-section { margin-bottom: 18px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.4px; display: block; margin-bottom: 6px; }
+  .form-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; -webkit-appearance: none; }
+  .form-input:focus { border-color: var(--red); }
+  .form-input::placeholder { color: var(--gray-400); }
+  .form-select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .radio-group { display: flex; gap: 8px; }
+  .radio-option { flex: 1; padding: 11px 8px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--white); font-size: 13px; font-weight: 500; color: var(--gray-600); cursor: pointer; text-align: center; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+  .radio-option.sel-type { border-color: var(--red); background: var(--red-light); color: var(--red); }
+  .radio-option.sel-ok { border-color: var(--green); background: var(--green-light); color: var(--green); }
+  .radio-option.sel-hs { border-color: var(--red); background: var(--red-light); color: var(--red); }
+  .gps-info { display: flex; align-items: center; gap: 8px; background: #EFF6FF; border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #1D4ED8; }
+  .gps-dot { width: 8px; height: 8px; background: #2563EB; border-radius: 50%; animation: pulse 1.5s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+  /* LIST SCREEN */
+  #search-bar { padding: 12px 14px; background: var(--white); border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; z-index: 10; }
+  #search-input { width: 100%; padding: 10px 14px; background: var(--gray-100); border: none; border-radius: var(--radius); font-size: 15px; color: var(--gray-900); outline: none; }
+  #search-input::placeholder { color: var(--gray-400); }
+  #filter-bar { display: flex; gap: 8px; padding: 10px 14px; background: var(--white); border-bottom: 1px solid var(--gray-100); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #filter-bar::-webkit-scrollbar { display: none; }
+  .filter-chip { padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--gray-200); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+  .filter-chip.active { border-color: var(--red); background: var(--red-light); color: var(--red); }
+  #hydrant-list { padding: 8px 0; }
+  .hydrant-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--white); border-bottom: 1px solid var(--gray-100); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .hydrant-item:active { background: var(--gray-50); }
+  .item-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .item-icon.ok { background: var(--green-light); }
+  .item-icon.hs { background: var(--red-light); }
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-size: 15px; font-weight: 700; color: var(--gray-900); }
+  .item-addr { font-size: 12px; color: var(--gray-400); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .item-status { font-size: 11px; font-weight: 600; }
+  .item-status.ok { color: var(--green); }
+  .item-status.hs { color: var(--red); }
+  .item-dist { font-size: 11px; color: var(--gray-400); }
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--gray-400); }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; font-weight: 500; color: var(--gray-600); margin-bottom: 6px; }
+  .empty-state span { font-size: 13px; }
+
+  /* TOAST */
+  #toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--gray-900); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; z-index: 9999; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* OVERLAY */
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 550; display: none; }
+  #overlay.show { display: block; }
+
+  /* Leaflet custom markers */
+  .hmarker { width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; }
+  .hmarker.ok { background: #16A34A; }
+  .hmarker.hs { background: #DC2626; }
+  .hmarker.nearest { background: #D97706; border-width: 3px; width: 38px; height: 38px; }
+  .hmarker-me { width: 18px; height: 18px; background: #2563EB; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 5px rgba(37,99,235,0.25); }
+
+  /* Divider in form */
+  .form-divider { height: 1px; background: var(--gray-200); margin: 6px 0 18px; }
+
+  /* Page title in list/add */
+  .page-title { font-size: 22px; font-weight: 800; color: var(--gray-900); padding: 18px 14px 8px; letter-spacing: -0.5px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- HEADER -->
+  <div id="header">
+    <span id="header-icon">🚒</span>
+    <div style="flex:1">
+      <div id="header-h1" style="font-size:17px;font-weight:700;letter-spacing:-0.3px;">FireHydrant</div>
+      <div style="font-size:11px;opacity:0.8;margin-top:1px;" id="header-sub">Points d'eau incendie</div>
+    </div>
+    <span id="count-badge" style="background:rgba(255,255,255,0.2);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;">0 poteau</span>
+  </div>
+
+  <!-- CONTENT -->
+  <div id="content">
+
+    <!-- MAP SCREEN -->
+    <div class="screen active" id="screen-map">
+      <div id="map"></div>
+      <div id="map-toolbar">
+        <button class="map-tool-btn" onclick="locateMe()" title="Ma position">📍</button>
+        <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🎯</button>
+        <button class="map-tool-btn" id="map-zoom-in" onclick="mapObj.zoomIn()">+</button>
+        <button class="map-tool-btn" id="map-zoom-out" onclick="mapObj.zoomOut()">−</button>
+      </div>
+      <div id="legend">
+        <div class="legend-row"><div class="legend-dot" style="background:#16A34A;"></div><span>Opérationnel</span></div>
+        <div class="legend-row"><div class="legend-dot" style="background:#DC2626;"></div><span>Hors service</span></div>
+        <div class="legend-row"><div class="legend-dot" style="background:#D97706;"></div><span>Le plus proche</span></div>
+      </div>
+
+      <!-- Overlay -->
+      <div id="overlay" onclick="closeAll()"></div>
+
+      <!-- Detail bottom sheet -->
+      <div id="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-content" id="sheet-content"></div>
+      </div>
+
+      <!-- Nearest banner -->
+      <div id="nearest-banner">
+        <div class="nearest-label">⚡ Poteau le plus proche</div>
+        <div class="nearest-name" id="nearest-name">—</div>
+        <div class="nearest-chips" id="nearest-chips"></div>
+        <button class="btn-primary" id="nearest-nav-btn">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><path d="M12 2L19 21 12 17 5 21z" fill="currentColor" stroke="none"/></svg>
+          Naviguer vers ce poteau
+        </button>
+        <button class="btn-secondary" onclick="closeNearest()">Fermer</button>
+      </div>
+    </div>
+
+    <!-- LIST SCREEN -->
+    <div class="screen" id="screen-list">
+      <div class="page-title">Points d'eau</div>
+      <div id="search-bar">
+        <input id="search-input" type="search" placeholder="🔍  Rechercher une adresse ou un ID..." oninput="renderList()"/>
+      </div>
+      <div id="filter-bar">
+        <div class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">Tous</div>
+        <div class="filter-chip" data-filter="ok" onclick="setFilter('ok',this)">✓ Opérationnel</div>
+        <div class="filter-chip" data-filter="hs" onclick="setFilter('hs',this)">✕ Hors service</div>
+        <div class="filter-chip" data-filter="poteau" onclick="setFilter('poteau',this)">Poteau</div>
+        <div class="filter-chip" data-filter="borne" onclick="setFilter('borne',this)">Borne</div>
+        <div class="filter-chip" data-filter="reservoir" onclick="setFilter('reservoir',this)">Réservoir</div>
+      </div>
+      <div id="hydrant-list"></div>
+    </div>
+
+    <!-- ADD SCREEN -->
+    <div class="screen" id="screen-add">
+      <div class="page-title" id="form-title">Ajouter un point d'eau</div>
+      <div class="form-wrap">
+        <input type="hidden" id="edit-id" value=""/>
+
+        <div class="form-section">
+          <label class="form-label">Type de point d'eau</label>
+          <div class="radio-group">
+            <div class="radio-option sel-type" id="t-poteau" onclick="selType('poteau')">🔴 Poteau</div>
+            <div class="radio-option" id="t-borne" onclick="selType('borne')">💧 Borne</div>
+            <div class="radio-option" id="t-reservoir" onclick="selType('reservoir')">🏊 Réservoir</div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">Identifiant</label>
+          <input class="form-input" id="f-id" type="text" placeholder="Ex: PI-042, BI-007..."/>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">Adresse / Lieu</label>
+          <input class="form-input" id="f-addr" type="text" placeholder="Ex: 12 Rue de la Mairie"/>
+          <div class="gps-info" id="gps-info">
+            <div class="gps-dot"></div>
+            <span id="gps-text">Récupération de la position GPS...</span>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">Diamètre</label>
+          <select class="form-select" id="f-diam">
+            <option>100 mm</option>
+            <option>150 mm</option>
+            <option>80 mm</option>
+            <option>200 mm</option>
+            <option>Inconnu</option>
+          </select>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">Pression estimée (bar)</label>
+          <input class="form-input" id="f-pres" type="number" placeholder="Ex: 3.5" step="0.1" min="0" max="20"/>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">État</label>
+          <div class="radio-group">
+            <div class="radio-option sel-ok" id="e-ok" onclick="selEtat('ok')">✓ Opérationnel</div>
+            <div class="radio-option" id="e-hs" onclick="selEtat('hs')">✕ Hors service</div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">Notes (optionnel)</label>
+          <textarea class="form-input" id="f-notes" rows="2" placeholder="Ex: Accès difficile, clé spéciale nécessaire..."></textarea>
+        </div>
+
+        <div class="form-divider"></div>
+        <button class="btn-primary" onclick="submitForm()">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.5;"><path d="M12 5v14M5 12h14"/></svg>
+          <span id="submit-label">Enregistrer le point d'eau</span>
+        </button>
+        <button class="btn-secondary" onclick="resetForm(); switchTab('map')">Annuler</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div id="bottom-nav">
+    <button class="nav-btn active" id="nav-map" onclick="switchTab('map')">
+      <svg viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+      Carte
+      <div class="dot"></div>
+    </button>
+    <button class="nav-btn" id="nav-nearest" onclick="switchTab('map'); setTimeout(findNearest,300)">
+      <svg viewBox="0 0 24 24"><path d="M12 2L19 21 12 17 5 21z" fill="currentColor" stroke="none"/></svg>
+      Plus proche
+      <div class="dot"></div>
+    </button>
+    <button class="nav-btn" id="nav-add" onclick="switchTab('add')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+      Ajouter
+      <div class="dot"></div>
+    </button>
+    <button class="nav-btn" id="nav-list" onclick="switchTab('list')">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
+      Liste
+      <div class="dot"></div>
+    </button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'hydrofinder_v1';
+let hydrants = [];
+let myLat = null, myLng = null;
+let activeFilter = 'all';
+let selectedType = 'poteau', selectedEtat = 'ok';
+let nearestId = null;
+
+function load() {
+  try { hydrants = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { hydrants = []; }
+}
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(hydrants));
+  updateBadge();
+}
+function updateBadge() {
+  const n = hydrants.length;
+  document.getElementById('count-badge').textContent = n + (n > 1 ? ' points' : ' point');
+}
+function genId(type) {
+  const prefix = type === 'poteau' ? 'PI' : type === 'borne' ? 'BI' : 'RI';
+  const nums = hydrants.filter(h=>h.type===type).map(h=>parseInt(h.id.split('-')[1])||0);
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  return prefix + '-' + String(next).padStart(3,'0');
+}
+
+// ─── MAP ────────────────────────────────────────────────────────────────────
+let mapObj, meMarker;
+const markers = {};
+
+function initMap() {
+  // Default: center of France (or Beaune area)
+  mapObj = L.map('map', { zoomControl: false, attributionControl: false }).setView([47.0208, 4.8396], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapObj);
+  L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(mapObj);
+  locateMe();
+}
+
+function makeIcon(h, isNearest) {
+  const cls = isNearest ? 'hmarker nearest' : ('hmarker ' + (h.ok ? 'ok' : 'hs'));
+  const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
+  return L.divIcon({ className: '', html: `<div class="${cls}">${emoji}</div>`, iconSize: isNearest ? [38,38] : [32,32], iconAnchor: isNearest ? [19,19] : [16,16] });
+}
+
+function renderMarkers() {
+  Object.values(markers).forEach(m => mapObj.removeLayer(m));
+  hydrants.forEach(h => {
+    if (!h.lat || !h.lng) return;
+    const m = L.marker([h.lat, h.lng], { icon: makeIcon(h, h.id === nearestId) });
+    m.on('click', () => showDetail(h.id));
+    m.addTo(mapObj);
+    markers[h.id] = m;
+  });
+}
+
+function locateMe() {
+  if (!navigator.geolocation) { showToast('Géolocalisation non disponible'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    myLat = pos.coords.latitude;
+    myLng = pos.coords.longitude;
+    document.getElementById('gps-text').textContent = myLat.toFixed(5) + '° N, ' + myLng.toFixed(5) + '° E';
+    if (meMarker) mapObj.removeLayer(meMarker);
+    meMarker = L.marker([myLat, myLng], {
+      icon: L.divIcon({ className:'', html:'<div class="hmarker-me"></div>', iconSize:[18,18], iconAnchor:[9,9] })
+    }).addTo(mapObj);
+    mapObj.setView([myLat, myLng], 15);
+  }, () => {
+    document.getElementById('gps-text').textContent = 'Position GPS indisponible';
+  });
+}
+
+function haversine(lat1,lng1,lat2,lng2) {
+  const R=6371000, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function findNearest() {
+  closeAll();
+  const ops = hydrants.filter(h => h.ok && h.lat && h.lng);
+  if (!ops.length) { showToast('Aucun poteau opérationnel disponible'); return; }
+  if (!myLat) { showToast('Position GPS en cours de récupération...'); locateMe(); return; }
+  let best = null, bestDist = Infinity;
+  ops.forEach(h => { const d = haversine(myLat, myLng, h.lat, h.lng); if (d < bestDist) { bestDist = d; best = h; } });
+  nearestId = best.id;
+  renderMarkers();
+  mapObj.setView([best.lat, best.lng], 16);
+  document.getElementById('nearest-name').textContent = best.id + ' — ' + best.addr;
+  const dist = bestDist < 1000 ? Math.round(bestDist) + ' m' : (bestDist/1000).toFixed(1) + ' km';
+  document.getElementById('nearest-chips').innerHTML =
+    `<div class="chip">📍 ${dist}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
+  document.getElementById('nearest-nav-btn').onclick = () => navigate(best.lat, best.lng, best.addr);
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('nearest-banner').classList.add('show');
+}
+
+function closeNearest() {
+  document.getElementById('nearest-banner').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+  nearestId = null;
+  renderMarkers();
+}
+
+function navigate(lat, lng, name) {
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  window.open(url, '_blank');
+}
+
+// ─── DETAIL SHEET ────────────────────────────────────────────────────────────
+function showDetail(id) {
+  const h = hydrants.find(x => x.id === id);
+  if (!h) return;
+  const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
+  const statusCls = h.ok ? 'status-ok' : 'status-hs';
+  const statusTxt = h.ok ? '✓ Opérationnel' : '✕ Hors service';
+  document.getElementById('sheet-content').innerHTML = `
+    <div class="sheet-header">
+      <div class="sheet-icon ${h.ok?'ok':'hs'}" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${emoji}</div>
+      <div>
+        <div class="sheet-title">${h.id}</div>
+        <div class="sheet-sub">${h.addr}</div>
+      </div>
+    </div>
+    <div class="sheet-grid">
+      <div class="sheet-field"><label>Type</label><span>${capitalize(h.type)}</span></div>
+      <div class="sheet-field"><label>Diamètre</label><span>${h.diam}</span></div>
+      <div class="sheet-field"><label>Pression</label><span>${h.pres ? h.pres + ' bar' : '—'}</span></div>
+      <div class="sheet-field"><label>État</label><span class="status-badge ${statusCls}">${statusTxt}</span></div>
+    </div>
+    ${h.notes ? `<div class="sheet-notes show">📝 ${h.notes}</div>` : ''}
+    <button class="btn-primary" onclick="navigate(${h.lat},${h.lng},'${h.addr}')">
+      <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;stroke:none;"><path d="M12 2L19 21 12 17 5 21z"/></svg>
+      Naviguer vers ce poteau
+    </button>
+    <button class="btn-secondary" onclick="editHydrant('${h.id}')">✏️ Modifier</button>
+    <button class="btn-danger" onclick="deleteHydrant('${h.id}')">🗑 Supprimer</button>
+  `;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('bottom-sheet').classList.add('show');
+}
+
+function closeSheet() {
+  document.getElementById('bottom-sheet').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+}
+function closeAll() { closeSheet(); closeNearest(); }
+
+// ─── FORM ────────────────────────────────────────────────────────────────────
+function selType(t) {
+  selectedType = t;
+  ['poteau','borne','reservoir'].forEach(x => document.getElementById('t-'+x).className = 'radio-option');
+  document.getElementById('t-'+t).classList.add('sel-type');
+  // Auto-suggest ID
+  const fid = document.getElementById('f-id');
+  if (!fid.value || fid.value.match(/^(PI|BI|RI)-\d+$/)) fid.value = genId(t);
+}
+function selEtat(e) {
+  selectedEtat = e;
+  document.getElementById('e-ok').className = 'radio-option' + (e==='ok' ? ' sel-ok' : '');
+  document.getElementById('e-hs').className = 'radio-option' + (e==='hs' ? ' sel-hs' : '');
+}
+
+function resetForm() {
+  document.getElementById('edit-id').value = '';
+  document.getElementById('form-title').textContent = 'Ajouter un point d\'eau';
+  document.getElementById('submit-label').textContent = 'Enregistrer le point d\'eau';
+  selectedType = 'poteau'; selectedEtat = 'ok';
+  ['poteau','borne','reservoir'].forEach(x => document.getElementById('t-'+x).className = 'radio-option');
+  document.getElementById('t-poteau').classList.add('sel-type');
+  document.getElementById('e-ok').className = 'radio-option sel-ok';
+  document.getElementById('e-hs').className = 'radio-option';
+  document.getElementById('f-id').value = genId('poteau');
+  document.getElementById('f-addr').value = '';
+  document.getElementById('f-diam').value = '100 mm';
+  document.getElementById('f-pres').value = '';
+  document.getElementById('f-notes').value = '';
+  locateMe();
+}
+
+function submitForm() {
+  const id = document.getElementById('f-id').value.trim();
+  const addr = document.getElementById('f-addr').value.trim();
+  if (!id) { showToast('Veuillez renseigner un identifiant'); return; }
+  if (!addr) { showToast('Veuillez renseigner une adresse'); return; }
+  const editId = document.getElementById('edit-id').value;
+  const h = {
+    id, addr, type: selectedType, ok: selectedEtat === 'ok',
+    diam: document.getElementById('f-diam').value,
+    pres: document.getElementById('f-pres').value,
+    notes: document.getElementById('f-notes').value.trim(),
+    lat: myLat, lng: myLng,
+    added: editId ? undefined : new Date().toLocaleDateString('fr-FR')
+  };
+  if (editId) {
+    const i = hydrants.findIndex(x => x.id === editId);
+    if (i >= 0) { h.added = hydrants[i].added; hydrants[i] = h; }
+  } else {
+    if (hydrants.find(x => x.id === id)) { showToast('Cet identifiant existe déjà'); return; }
+    hydrants.push(h);
+  }
+  save(); renderMarkers(); renderList();
+  showToast(editId ? '✓ Poteau modifié' : '✓ Poteau ajouté !');
+  resetForm();
+  switchTab('map');
+  if (h.lat && h.lng) mapObj.setView([h.lat, h.lng], 16);
+}
+
+function editHydrant(id) {
+  const h = hydrants.find(x => x.id === id);
+  if (!h) return;
+  closeSheet();
+  document.getElementById('form-title').textContent = 'Modifier le point d\'eau';
+  document.getElementById('submit-label').textContent = 'Enregistrer les modifications';
+  document.getElementById('edit-id').value = h.id;
+  selType(h.type); selEtat(h.ok ? 'ok' : 'hs');
+  document.getElementById('f-id').value = h.id;
+  document.getElementById('f-addr').value = h.addr;
+  document.getElementById('f-diam').value = h.diam;
+  document.getElementById('f-pres').value = h.pres;
+  document.getElementById('f-notes').value = h.notes || '';
+  if (h.lat) { myLat = h.lat; myLng = h.lng; document.getElementById('gps-text').textContent = h.lat.toFixed(5) + '° N, ' + h.lng.toFixed(5) + '° E'; }
+  switchTab('add');
+}
+
+function deleteHydrant(id) {
+  if (!confirm('Supprimer ce point d\'eau ?')) return;
+  hydrants = hydrants.filter(h => h.id !== id);
+  save(); renderMarkers(); renderList(); closeAll();
+  showToast('Poteau supprimé');
+}
+
+// ─── LIST ────────────────────────────────────────────────────────────────────
+function setFilter(f, el) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+
+function renderList() {
+  const q = (document.getElementById('search-input').value || '').toLowerCase();
+  let list = hydrants.filter(h => {
+    if (activeFilter === 'ok') return h.ok;
+    if (activeFilter === 'hs') return !h.ok;
+    if (activeFilter === 'poteau') return h.type === 'poteau';
+    if (activeFilter === 'borne') return h.type === 'borne';
+    if (activeFilter === 'reservoir') return h.type === 'reservoir';
+    return true;
+  }).filter(h => !q || h.id.toLowerCase().includes(q) || h.addr.toLowerCase().includes(q));
+
+  // Sort by distance if we have location
+  if (myLat) {
+    list.forEach(h => { h._dist = (h.lat && h.lng) ? haversine(myLat, myLng, h.lat, h.lng) : Infinity; });
+    list.sort((a,b) => a._dist - b._dist);
+  }
+
+  const container = document.getElementById('hydrant-list');
+  if (!list.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Aucun point d'eau trouvé</p><span>Modifiez votre recherche ou ajoutez un poteau</span></div>`;
+    return;
+  }
+  container.innerHTML = list.map(h => {
+    const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
+    const dist = (myLat && h.lat) ? (h._dist < 1000 ? Math.round(h._dist) + ' m' : (h._dist/1000).toFixed(1) + ' km') : '';
+    return `<div class="hydrant-item" onclick="switchTab('map'); setTimeout(()=>showDetail('${h.id}'),300)">
+      <div class="item-icon ${h.ok?'ok':'hs'}">${emoji}</div>
+      <div class="item-info">
+        <div class="item-name">${h.id}</div>
+        <div class="item-addr">${h.addr}</div>
+      </div>
+      <div class="item-meta">
+        <div class="item-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>
+        ${dist ? `<div class="item-dist">${dist}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── NAV ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['map','list','add','nearest'].forEach(t => {
+    const s = document.getElementById('screen-' + t);
+    const n = document.getElementById('nav-' + t);
+    if (s) { s.classList.toggle('active', t === tab); }
+    if (n) { n.classList.toggle('active', t === tab); }
+  });
+  if (tab === 'add' && !document.getElementById('edit-id').value) resetForm();
+  if (tab === 'list') renderList();
+  if (tab === 'map') { closeAll(); setTimeout(() => mapObj.invalidateSize(), 50); }
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+load();
+updateBadge();
+initMap();
+renderMarkers();
+
+// Auto-suggest first ID
+document.getElementById('f-id').value = genId('poteau');
+</script>
+</body>
+</html>

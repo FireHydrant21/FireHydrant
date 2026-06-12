@@ -7,8 +7,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" content="#B91C1C"/>
 <title>FireHydrant — Points d'eau incendie</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<meta name="apple-mobile-web-app-title" content="FireHydrant"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -177,6 +181,8 @@
         <button class="map-tool-btn" onclick="locateMe()" title="Ma position">📍</button>
         <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🎯</button>
         <button class="map-tool-btn" id="btn-add-mode" onclick="toggleAddMode()" title="Ajouter en cliquant">➕</button>
+        <button class="map-tool-btn" id="btn-compass" onclick="toggleCompass()" title="Boussole">🧭</button>
+        <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">🎯</button>
         <button class="map-tool-btn" onclick="mapObj.zoomIn()">+</button>
         <button class="map-tool-btn" onclick="mapObj.zoomOut()">−</button>
       </div>
@@ -405,7 +411,7 @@ function fmtDist(d) { return d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(
 // ── MAP ───────────────────────────────────────────────────────────────────────
 let mapObj;
 function initMap() {
-  mapObj = L.map('map', { zoomControl: false, attributionControl: false }).setView([47.0208, 4.8396], 13);
+  mapObj = L.map('map', { zoomControl: false, attributionControl: false, rotate: true, bearing: 0 }).setView([47.0208, 4.8396], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapObj);
   L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(mapObj);
   mapObj.on('click', onMapClick);
@@ -696,6 +702,73 @@ function switchTab(tab) {
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ── COMPASS & FOLLOW MODE ─────────────────────────────────────────────────────
+let compassActive = false;
+let followActive = false;
+let watchId = null;
+let currentHeading = 0;
+
+function toggleCompass() {
+  compassActive = !compassActive;
+  const btn = document.getElementById('btn-compass');
+  btn.classList.toggle('active-mode', compassActive);
+  if (compassActive) {
+    showToast('🧭 Boussole activée');
+    // iOS requires permission request
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then(state => {
+        if (state === 'granted') window.addEventListener('deviceorientationabsolute', onOrientation, true);
+        else { showToast('⚠️ Permission boussole refusée'); compassActive = false; btn.classList.remove('active-mode'); }
+      }).catch(() => { showToast('⚠️ Boussole non disponible'); });
+    } else {
+      window.addEventListener('deviceorientationabsolute', onOrientation, true);
+      window.addEventListener('deviceorientation', onOrientation, true);
+    }
+  } else {
+    showToast('Boussole désactivée');
+    window.removeEventListener('deviceorientationabsolute', onOrientation, true);
+    window.removeEventListener('deviceorientation', onOrientation, true);
+    mapObj.setBearing(0);
+  }
+}
+
+function onOrientation(e) {
+  let heading = null;
+  if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading; // iOS
+  else if (e.absolute && e.alpha !== null) heading = 360 - e.alpha; // Android
+  else if (e.alpha !== null) heading = 360 - e.alpha;
+  if (heading !== null) {
+    currentHeading = heading;
+    if (compassActive && mapObj.setBearing) mapObj.setBearing(heading);
+    // Rotate the me marker arrow
+    if (meMarker) {
+      const el = meMarker.getElement();
+      if (el) el.style.transform = `rotate(${heading}deg)`;
+    }
+  }
+}
+
+function toggleFollow() {
+  followActive = !followActive;
+  const btn = document.getElementById('btn-follow');
+  btn.classList.toggle('active-mode', followActive);
+  if (followActive) {
+    showToast('📍 Suivi de position activé');
+    if (watchId) navigator.geolocation.clearWatch(watchId);
+    watchId = navigator.geolocation.watchPosition(pos => {
+      myLat = pos.coords.latitude;
+      myLng = pos.coords.longitude;
+      updateMeMarker();
+      if (followActive) mapObj.setView([myLat, myLng], mapObj.getZoom());
+      document.getElementById('gps-text').textContent = myLat.toFixed(5) + '° N, ' + myLng.toFixed(5) + '° E';
+      renderList();
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 2000 });
+  } else {
+    showToast('Suivi désactivé');
+    if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  }
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init() {

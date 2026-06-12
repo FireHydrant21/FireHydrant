@@ -181,10 +181,8 @@
         <button class="map-tool-btn" onclick="locateMe()" title="Ma position">📍</button>
         <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🎯</button>
         <button class="map-tool-btn" id="btn-add-mode" onclick="toggleAddMode()" title="Ajouter en cliquant">➕</button>
-        <button class="map-tool-btn" id="btn-compass" onclick="toggleCompass()" title="Boussole">🧭</button>
-        <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">🎯</button>
-        <button class="map-tool-btn" onclick="mapObj.zoomIn()">+</button>
-        <button class="map-tool-btn" onclick="mapObj.zoomOut()">−</button>
+        <button class="map-tool-btn" id="btn-compass" onclick="toggleCompass()" title="Boussole">⬆️</button>
+        <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">📍</button>
       </div>
       <div id="add-mode-hint">📍 Appuyez sur la carte pour placer un point d'eau</div>
       <div id="legend">
@@ -298,7 +296,7 @@
     </button>
     <button class="nav-btn" id="nav-nearest" onclick="switchTab('map'); setTimeout(findNearest,300)">
       <svg viewBox="0 0 24 24"><path d="M12 2L19 21 12 17 5 21z" fill="currentColor" stroke="none"/></svg>
-      Plus proche<div class="dot"></div>
+      Itinéraire<div class="dot"></div>
     </button>
     <button class="nav-btn" id="nav-add" onclick="switchTab('add')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
@@ -562,20 +560,35 @@ function showDetail(id) {
 function closeSheet() { document.getElementById('bottom-sheet').classList.remove('show'); document.getElementById('overlay').classList.remove('show'); }
 
 // ── NEAREST ───────────────────────────────────────────────────────────────────
-function findNearest() {
+async function getRoadDistance(lat1, lng1, lat2, lng2) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.routes && d.routes.length) return d.routes[0].distance;
+  } catch(e) {}
+  return null;
+}
+
+async function findNearest() {
   closeAll();
   const ops = hydrants.filter(h => h.ok && h.lat && h.lng);
   if (!ops.length) { showToast('Aucun point d\'eau opérationnel'); return; }
   if (!myLat) { showToast('Position GPS en cours...'); locateMe(); return; }
+  // First find nearest by straight line (fast)
   let best = null, bestDist = Infinity;
   ops.forEach(h => { const d = haversine(myLat, myLng, h.lat, h.lng); if (d < bestDist) { bestDist = d; best = h; } });
   nearestId = best.id; renderMarkers();
   mapObj.setView([best.lat, best.lng], 16);
   document.getElementById('nearest-name').textContent = best.id + ' — ' + best.addr;
-  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">📍 ${fmtDist(bestDist)}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
+  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">⏳ Calcul itinéraire...</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
   document.getElementById('nearest-nav-btn').onclick = () => navigate(best.lat, best.lng);
   document.getElementById('overlay').classList.add('show');
   document.getElementById('nearest-banner').classList.add('show');
+  // Then get road distance
+  const roadDist = await getRoadDistance(myLat, myLng, best.lat, best.lng);
+  const distLabel = roadDist ? '🚗 ' + fmtDist(roadDist) : '📍 ' + fmtDist(bestDist) + ' (vol d\'oiseau)';
+  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">${distLabel}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
 }
 function closeNearest() { document.getElementById('nearest-banner').classList.remove('show'); document.getElementById('overlay').classList.remove('show'); nearestId = null; renderMarkers(); }
 function closeAll() { closeSheet(); closeNearest(); cancelQuickAdd(); if (addMode) toggleAddMode(); }
@@ -707,20 +720,26 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 let compassActive = false;
 let followActive = false;
 let watchId = null;
-let currentHeading = 0;
+let lastHeading = 0;
+let headingBuffer = [];
 
 function toggleCompass() {
   compassActive = !compassActive;
   const btn = document.getElementById('btn-compass');
   btn.classList.toggle('active-mode', compassActive);
   if (compassActive) {
-    showToast('🧭 Boussole activée');
-    // iOS requires permission request
+    showToast('⬆️ Boussole activée');
+    headingBuffer = [];
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
       DeviceOrientationEvent.requestPermission().then(state => {
-        if (state === 'granted') window.addEventListener('deviceorientationabsolute', onOrientation, true);
-        else { showToast('⚠️ Permission boussole refusée'); compassActive = false; btn.classList.remove('active-mode'); }
-      }).catch(() => { showToast('⚠️ Boussole non disponible'); });
+        if (state === 'granted') {
+          window.addEventListener('deviceorientationabsolute', onOrientation, true);
+        } else {
+          showToast('⚠️ Permission boussole refusée');
+          compassActive = false;
+          btn.classList.remove('active-mode');
+        }
+      }).catch(() => showToast('⚠️ Boussole non disponible'));
     } else {
       window.addEventListener('deviceorientationabsolute', onOrientation, true);
       window.addEventListener('deviceorientation', onOrientation, true);
@@ -729,24 +748,31 @@ function toggleCompass() {
     showToast('Boussole désactivée');
     window.removeEventListener('deviceorientationabsolute', onOrientation, true);
     window.removeEventListener('deviceorientation', onOrientation, true);
-    mapObj.setBearing(0);
+    if (mapObj.setBearing) mapObj.setBearing(0);
   }
 }
 
 function onOrientation(e) {
+  if (!compassActive) return;
   let heading = null;
-  if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading; // iOS
-  else if (e.absolute && e.alpha !== null) heading = 360 - e.alpha; // Android
-  else if (e.alpha !== null) heading = 360 - e.alpha;
-  if (heading !== null) {
-    currentHeading = heading;
-    if (compassActive && mapObj.setBearing) mapObj.setBearing(heading);
-    // Rotate the me marker arrow
-    if (meMarker) {
-      const el = meMarker.getElement();
-      if (el) el.style.transform = `rotate(${heading}deg)`;
-    }
+  if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
+    heading = e.webkitCompassHeading; // iOS — already absolute
+  } else if (e.absolute === true && e.alpha !== null) {
+    heading = (360 - e.alpha) % 360; // Android absolute
+  } else {
+    return; // Ignore relative events on Android
   }
+  // Smooth heading with rolling average of last 5 values
+  headingBuffer.push(heading);
+  if (headingBuffer.length > 5) headingBuffer.shift();
+  // Circular mean to avoid 0/360 wrap issues
+  let sinSum = 0, cosSum = 0;
+  headingBuffer.forEach(h => { sinSum += Math.sin(h * Math.PI/180); cosSum += Math.cos(h * Math.PI/180); });
+  const smoothed = (Math.atan2(sinSum, cosSum) * 180/Math.PI + 360) % 360;
+  // Only update if change > 2° to avoid micro-jitter
+  if (Math.abs(smoothed - lastHeading) < 2) return;
+  lastHeading = smoothed;
+  if (mapObj.setBearing) mapObj.setBearing(smoothed);
 }
 
 function toggleFollow() {
@@ -754,16 +780,20 @@ function toggleFollow() {
   const btn = document.getElementById('btn-follow');
   btn.classList.toggle('active-mode', followActive);
   if (followActive) {
-    showToast('📍 Suivi de position activé');
+    showToast('📍 Suivi activé — carte centrée sur vous');
     if (watchId) navigator.geolocation.clearWatch(watchId);
     watchId = navigator.geolocation.watchPosition(pos => {
       myLat = pos.coords.latitude;
       myLng = pos.coords.longitude;
       updateMeMarker();
-      if (followActive) mapObj.setView([myLat, myLng], mapObj.getZoom());
+      // Only re-center if follow is still active
+      if (followActive) mapObj.panTo([myLat, myLng], { animate: true, duration: 0.5 });
       document.getElementById('gps-text').textContent = myLat.toFixed(5) + '° N, ' + myLng.toFixed(5) + '° E';
-      renderList();
-    }, () => {}, { enableHighAccuracy: true, maximumAge: 2000 });
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+    // Stop follow if user manually pans the map
+    mapObj.once('dragstart', () => {
+      if (followActive) { followActive = false; btn.classList.remove('active-mode'); showToast('Suivi désactivé'); if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; } }
+    });
   } else {
     showToast('Suivi désactivé');
     if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }

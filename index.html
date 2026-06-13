@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+   <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
@@ -157,6 +157,8 @@
   .anomalie-chip { padding: 8px 10px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
   .anomalie-chip.selected { border-color: var(--orange); background: var(--orange-light); color: var(--orange); }
   .form-divider { height: 1px; background: var(--gray-200); margin: 6px 0 18px; }
+  .anomalie-chip { padding: 7px 12px; border-radius: 20px; border: 1.5px solid var(--gray-200); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
+  .anomalie-chip.selected { border-color: var(--orange); background: var(--orange-light); color: var(--orange); font-weight: 700; }
   .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; color: var(--gray-600); }
   .spinner { width: 36px; height: 36px; border: 3px solid var(--gray-200); border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -185,15 +187,6 @@
         </button>
         <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🚒</button>
         <button class="map-tool-btn" id="btn-add-mode" onclick="toggleAddMode()" title="Ajouter en cliquant">➕</button>
-        <button class="map-tool-btn" id="btn-compass" onclick="toggleCompass()" title="Boussole">
-          <svg id="compass-svg" viewBox="0 0 24 24" style="width:22px;height:22px;transition:transform 0.3s ease;">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            <polygon points="12,3 14.5,12 12,10 9.5,12" fill="#DC2626"/>
-            <polygon points="12,21 14.5,12 12,14 9.5,12" fill="#9CA3AF"/>
-            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-            <text x="12" y="6.5" text-anchor="middle" font-size="3" font-weight="bold" fill="#DC2626">N</text>
-          </svg>
-        </button>
         <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">
           <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 2L19 21 12 17 5 21z"/></svg>
         </button>
@@ -218,16 +211,39 @@
       </div>
       <div id="quick-add-sheet">
         <div class="sheet-handle"></div>
-        <div class="qa-title">Nouveau point d'eau</div>
-        <div class="qa-coord" id="qa-coord"></div>
-        <div class="qa-type-grid">
-          <button class="qa-type-btn" id="qa-poteau" onclick="quickSelType('poteau',this)"><span class="qa-icon">🔴</span>Poteau</button>
-          <button class="qa-type-btn" id="qa-borne" onclick="quickSelType('borne',this)"><span class="qa-icon">💧</span>Borne</button>
-          <button class="qa-type-btn" id="qa-reservoir" onclick="quickSelType('reservoir',this)"><span class="qa-icon">🏊</span>Réservoir</button>
+        <div style="padding:0 16px 24px;overflow-y:auto;max-height:85vh;">
+          <div class="qa-title">Nouveau point d'eau</div>
+          <div class="qa-coord" id="qa-coord"></div>
+          <div class="qa-type-grid">
+            <button class="qa-type-btn" id="qa-poteau" onclick="quickSelType('poteau',this)"><span class="qa-icon">🔴</span>Poteau</button>
+            <button class="qa-type-btn" id="qa-borne" onclick="quickSelType('borne',this)"><span class="qa-icon">💧</span>Borne</button>
+            <button class="qa-type-btn" id="qa-reservoir" onclick="quickSelType('reservoir',this)"><span class="qa-icon">🏊</span>Réservoir</button>
+          </div>
+          <input class="qa-input" id="qa-addr" type="text" placeholder="Adresse ou description du lieu"/>
+          <div id="qa-capacite-section" style="display:none;margin-bottom:10px;">
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Capacité</div>
+            <div style="display:flex;gap:8px;">
+              <input class="qa-input" id="qa-capacite" type="number" placeholder="Ex: 120" min="0" style="flex:2;margin-bottom:0"/>
+              <select class="form-select" id="qa-capacite-unit" style="flex:1;padding:11px 10px;">
+                <option value="m3">m³</option>
+                <option value="L">Litres</option>
+              </select>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Anomalies constatées</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;" id="qa-anomalie-chips">
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Fuite')">💧 Fuite</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué/caché')">🚧 Accès bloqué/caché</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Bouchon manquant')">🔩 Bouchon manquant</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Signalisation absente')">⚠️ Signalisation absente</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Vandalisme')">🔨 Vandalisme</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Pression insuffisante')">📉 Pression insuffisante</div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Notes complémentaires</div>
+          <textarea class="qa-input" id="qa-notes" rows="2" placeholder="Informations supplémentaires..." style="resize:none;margin-bottom:12px;"></textarea>
+          <button class="btn-primary" onclick="confirmQuickAdd()">✓ Ajouter ce point d'eau</button>
+          <button class="btn-secondary" onclick="cancelQuickAdd()">Annuler</button>
         </div>
-        <input class="qa-input" id="qa-addr" type="text" placeholder="Adresse ou description du lieu"/>
-        <button class="btn-primary" onclick="confirmQuickAdd()">✓ Ajouter ce point d'eau</button>
-        <button class="btn-secondary" onclick="cancelQuickAdd()">Annuler</button>
       </div>
     </div>
 
@@ -306,7 +322,7 @@
           <label class="form-label">Anomalies constatées</label>
           <div class="radio-group" style="flex-wrap:wrap;gap:6px" id="anomalie-chips">
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Fuite')">💧 Fuite</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué')">🚧 Accès bloqué</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué/caché')">🚧 Accès bloqué/caché</div>
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Bouchon manquant')">🔩 Bouchon manquant</div>
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Signalisation absente')">⚠️ Signalisation absente</div>
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Vandalisme')">🔨 Vandalisme</div>
@@ -543,13 +559,20 @@ function quickSelType(type, el) {
   quickType = type;
   document.querySelectorAll('.qa-type-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
+  document.getElementById('qa-capacite-section').style.display = type === 'reservoir' ? 'block' : 'none';
 }
 async function confirmQuickAdd() {
   if (!quickType) { showToast('Choisissez un type de point d\'eau'); return; }
   const addr = document.getElementById('qa-addr').value.trim() || (quickLat.toFixed(4) + ', ' + quickLng.toFixed(4));
-  const h = { id: genId(quickType), type: quickType, ok: true, addr, diam: '100 mm', pres: '', notes: '', lat: quickLat, lng: quickLng, added: new Date().toLocaleDateString('fr-FR') };
+  const anomalies = Array.from(document.querySelectorAll('#qa-anomalie-chips .anomalie-chip.selected')).map(el => el.dataset.val).join(', ');
+  const notes = document.getElementById('qa-notes').value.trim();
+  const notesStr = [anomalies ? '⚠️ Anomalies: ' + anomalies : '', notes].filter(Boolean).join(' | ');
+  const capaciteVal = document.getElementById('qa-capacite').value;
+  const capaciteUnit = document.getElementById('qa-capacite-unit').value;
+  const capacite = capaciteVal ? capaciteVal + ' ' + capaciteUnit : '';
+  const h = { id: genId(quickType), type: quickType, ok: true, addr, diam: '100 mm', pres: '', notes: notesStr, capacite, lat: quickLat, lng: quickLng, added: new Date().toLocaleDateString('fr-FR') };
   cancelQuickAdd();
-  toggleAddMode();
+  if (addMode) toggleAddMode();
   showToast('⏳ Enregistrement...');
   const ok = await dbInsert(h);
   if (ok) {
@@ -563,6 +586,12 @@ function cancelQuickAdd() {
   document.getElementById('quick-add-sheet').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
   quickLat = null; quickLng = null; quickType = null;
+  document.querySelectorAll('.qa-type-btn').forEach(b => { b.classList.remove('selected'); });
+  document.querySelectorAll('#qa-anomalie-chips .anomalie-chip').forEach(c => c.classList.remove('selected'));
+  document.getElementById('qa-addr').value = '';
+  document.getElementById('qa-notes').value = '';
+  document.getElementById('qa-capacite').value = '';
+  document.getElementById('qa-capacite-section').style.display = 'none';
 }
 
 // ── DETAIL SHEET ──────────────────────────────────────────────────────────────
@@ -642,6 +671,7 @@ function selType(t) {
 
 function toggleAnomalie(el, val) {
   el.classList.toggle('selected');
+  el.dataset.val = val;
 }
 
 function getAnomalies() {

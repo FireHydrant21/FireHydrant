@@ -1,4 +1,4 @@
-   <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
@@ -94,8 +94,14 @@
   .chip { background: var(--gray-100); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--gray-800); font-weight: 500; }
   .chip.green { background: var(--green-light); color: var(--green); }
   .chip.blue { background: var(--blue-light); color: var(--blue); }
-  #quick-add-sheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 700; background: var(--white); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-lg); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); padding: 0 16px 24px; }
+  #quick-add-sheet { position: absolute; inset: 0; z-index: 700; background: var(--white); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); overflow-y: auto; display: flex; flex-direction: column; }
   #quick-add-sheet.show { transform: translateY(0); }
+  #qa-header { background: var(--red); color: white; padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  #qa-header h2 { font-size: 16px; font-weight: 700; flex: 1; }
+  #qa-close-btn { background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 30px; height: 30px; color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  #qa-scroll { padding: 16px; flex: 1; }
+  .qa-section-title { font-size: 12px; font-weight: 700; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; margin-top: 16px; }
+  .qa-section-title:first-child { margin-top: 0; }
   .qa-title { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 4px; }
   .qa-coord { font-size: 12px; color: var(--gray-400); margin-bottom: 16px; }
   .qa-type-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
@@ -167,7 +173,7 @@
 <body>
 <div id="app">
   <div id="header">
-    <span id="header-icon">🚒</span>
+    <img src="apple-touch-icon.png" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;" alt="FireHydrant"/>
     <div id="header-title">FireHydrant</div>
     <div id="sync-indicator" title="Connecté à Supabase"></div>
     <span id="count-badge">0 point</span>
@@ -210,18 +216,48 @@
         <button class="btn-secondary" onclick="closeNearest()">Fermer</button>
       </div>
       <div id="quick-add-sheet">
-        <div class="sheet-handle"></div>
-        <div style="padding:0 16px 24px;overflow-y:auto;max-height:85vh;">
-          <div class="qa-title">Nouveau point d'eau</div>
-          <div class="qa-coord" id="qa-coord"></div>
-          <div class="qa-type-grid">
+        <div id="qa-header">
+          <span style="font-size:20px;">💧</span>
+          <h2>Nouveau point d'eau</h2>
+          <button id="qa-close-btn" onclick="cancelQuickAdd()">✕</button>
+        </div>
+        <div id="qa-scroll">
+          <div class="qa-coord" id="qa-coord" style="font-size:12px;color:var(--gray-400);margin-bottom:14px;"></div>
+
+          <div class="qa-section-title">Type de point d'eau</div>
+          <div class="qa-type-grid" style="margin-bottom:0;">
             <button class="qa-type-btn" id="qa-poteau" onclick="quickSelType('poteau',this)"><span class="qa-icon">🔴</span>Poteau</button>
             <button class="qa-type-btn" id="qa-borne" onclick="quickSelType('borne',this)"><span class="qa-icon">💧</span>Borne</button>
             <button class="qa-type-btn" id="qa-reservoir" onclick="quickSelType('reservoir',this)"><span class="qa-icon">🏊</span>Réservoir</button>
           </div>
-          <input class="qa-input" id="qa-addr" type="text" placeholder="Adresse ou description du lieu"/>
-          <div id="qa-capacite-section" style="display:none;margin-bottom:10px;">
-            <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Capacité</div>
+
+          <div class="qa-section-title">Identifiant</div>
+          <input class="qa-input" id="qa-id" type="text" placeholder="Ex: PI-001"/>
+
+          <div class="qa-section-title">Adresse / Lieu</div>
+          <input class="qa-input" id="qa-addr" type="text" placeholder="Adresse détectée automatiquement"/>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+              <div class="qa-section-title">Diamètre</div>
+              <select class="form-select" id="qa-diam" style="padding:11px 10px;">
+                <option>100 mm</option><option>150 mm</option><option>80 mm</option><option>200 mm</option><option>Inconnu</option>
+              </select>
+            </div>
+            <div>
+              <div class="qa-section-title">Pression (bar)</div>
+              <input class="qa-input" id="qa-pres" type="number" placeholder="Ex: 3.5" step="0.1" min="0" max="20" style="margin-bottom:0;"/>
+            </div>
+          </div>
+
+          <div class="qa-section-title">État</div>
+          <div style="display:flex;gap:8px;margin-bottom:4px;">
+            <div class="radio-option sel-ok" id="qa-etat-ok" onclick="quickSelEtat('ok')">✓ Opérationnel</div>
+            <div class="radio-option" id="qa-etat-hs" onclick="quickSelEtat('hs')">✕ Hors service</div>
+          </div>
+
+          <div id="qa-capacite-section" style="display:none;">
+            <div class="qa-section-title">Capacité du réservoir</div>
             <div style="display:flex;gap:8px;">
               <input class="qa-input" id="qa-capacite" type="number" placeholder="Ex: 120" min="0" style="flex:2;margin-bottom:0"/>
               <select class="form-select" id="qa-capacite-unit" style="flex:1;padding:11px 10px;">
@@ -230,8 +266,9 @@
               </select>
             </div>
           </div>
-          <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Anomalies constatées</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;" id="qa-anomalie-chips">
+
+          <div class="qa-section-title">Anomalies constatées</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;" id="qa-anomalie-chips">
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Fuite')">💧 Fuite</div>
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué/caché')">🚧 Accès bloqué/caché</div>
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Bouchon manquant')">🔩 Bouchon manquant</div>
@@ -239,10 +276,13 @@
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Vandalisme')">🔨 Vandalisme</div>
             <div class="anomalie-chip" onclick="toggleAnomalie(this,'Pression insuffisante')">📉 Pression insuffisante</div>
           </div>
-          <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Notes complémentaires</div>
-          <textarea class="qa-input" id="qa-notes" rows="2" placeholder="Informations supplémentaires..." style="resize:none;margin-bottom:12px;"></textarea>
-          <button class="btn-primary" onclick="confirmQuickAdd()">✓ Ajouter ce point d'eau</button>
-          <button class="btn-secondary" onclick="cancelQuickAdd()">Annuler</button>
+
+          <div class="qa-section-title">Notes complémentaires</div>
+          <textarea class="qa-input" id="qa-notes" rows="3" placeholder="Informations supplémentaires..." style="resize:none;"></textarea>
+
+          <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
+          <button class="btn-primary" onclick="confirmQuickAdd()">✓ Enregistrer le point d'eau</button>
+          <button class="btn-secondary" onclick="cancelQuickAdd()" style="margin-top:8px;margin-bottom:16px;">Annuler</button>
         </div>
       </div>
     </div>
@@ -460,7 +500,7 @@ function fmtDist(d) { return d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(
 // ── MAP ───────────────────────────────────────────────────────────────────────
 let mapObj;
 function initMap() {
-  mapObj = L.map('map', { zoomControl: false, attributionControl: false, rotate: true, bearing: 0 }).setView([47.0208, 4.8396], 13);
+  mapObj = L.map('map', { zoomControl: false, attributionControl: false, rotate: true, bearing: 0, touchRotate: true }).setView([47.0208, 4.8396], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapObj);
   L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(mapObj);
   mapObj.on('click', onMapClick);
@@ -803,6 +843,10 @@ function switchTab(tab) {
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function resetNorth() {
+  if (mapObj.setBearing) { mapObj.setBearing(0); showToast('⬆️ Nord remis en haut'); }
+}
 
 // ── COMPASS & FOLLOW MODE ─────────────────────────────────────────────────────
 let compassActive = false;

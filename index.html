@@ -154,6 +154,8 @@
   .hmarker.hs { background: #DC2626; }
   .hmarker.nearest { background: #D97706; width: 38px; height: 38px; }
   .hmarker-me { width: 18px; height: 18px; background: #2563EB; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 5px rgba(37,99,235,0.25); }
+  .anomalie-chip { padding: 8px 10px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
+  .anomalie-chip.selected { border-color: var(--orange); background: var(--orange-light); color: var(--orange); }
   .form-divider { height: 1px; background: var(--gray-200); margin: 6px 0 18px; }
   .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; color: var(--gray-600); }
   .spinner { width: 36px; height: 36px; border: 3px solid var(--gray-200); border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -178,11 +180,23 @@
         <div id="map-search-results"></div>
       </div>
       <div id="map-toolbar">
-        <button class="map-tool-btn" onclick="locateMe()" title="Ma position">📍</button>
-        <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🎯</button>
+        <button class="map-tool-btn" onclick="locateMe()" title="Ma position">
+          <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><circle cx="12" cy="12" r="9"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+        </button>
+        <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🚒</button>
         <button class="map-tool-btn" id="btn-add-mode" onclick="toggleAddMode()" title="Ajouter en cliquant">➕</button>
-        <button class="map-tool-btn" id="btn-compass" onclick="toggleCompass()" title="Boussole">⬆️</button>
-        <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">📍</button>
+        <button class="map-tool-btn" id="btn-compass" onclick="toggleCompass()" title="Boussole">
+          <svg id="compass-svg" viewBox="0 0 24 24" style="width:22px;height:22px;transition:transform 0.3s ease;">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <polygon points="12,3 14.5,12 12,10 9.5,12" fill="#DC2626"/>
+            <polygon points="12,21 14.5,12 12,14 9.5,12" fill="#9CA3AF"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+            <text x="12" y="6.5" text-anchor="middle" font-size="3" font-weight="bold" fill="#DC2626">N</text>
+          </svg>
+        </button>
+        <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">
+          <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 2L19 21 12 17 5 21z"/></svg>
+        </button>
       </div>
       <div id="add-mode-hint">📍 Appuyez sur la carte pour placer un point d'eau</div>
       <div id="legend">
@@ -278,9 +292,30 @@
             <div class="radio-option" id="e-hs" onclick="selEtat('hs')">✕ Hors service</div>
           </div>
         </div>
+        <div class="form-section" id="section-capacite" style="display:none">
+          <label class="form-label">Capacité du réservoir</label>
+          <div style="display:flex;gap:8px">
+            <input class="form-input" id="f-capacite" type="number" placeholder="Ex: 120" min="0" style="flex:2"/>
+            <select class="form-select" id="f-capacite-unit" style="flex:1">
+              <option value="m3">m³</option>
+              <option value="L">Litres</option>
+            </select>
+          </div>
+        </div>
         <div class="form-section">
-          <label class="form-label">Notes</label>
-          <textarea class="form-input" id="f-notes" rows="2" placeholder="Accès difficile, clé spéciale..."></textarea>
+          <label class="form-label">Anomalies constatées</label>
+          <div class="radio-group" style="flex-wrap:wrap;gap:6px" id="anomalie-chips">
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Fuite')">💧 Fuite</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué')">🚧 Accès bloqué</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Bouchon manquant')">🔩 Bouchon manquant</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Signalisation absente')">⚠️ Signalisation absente</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Vandalisme')">🔨 Vandalisme</div>
+            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Pression insuffisante')">📉 Pression insuffisante</div>
+          </div>
+        </div>
+        <div class="form-section">
+          <label class="form-label">Notes complémentaires</label>
+          <textarea class="form-input" id="f-notes" rows="2" placeholder="Informations supplémentaires..."></textarea>
         </div>
         <div class="form-divider"></div>
         <button class="btn-primary" onclick="submitForm()">✓ <span id="submit-label">Enregistrer le point d'eau</span></button>
@@ -327,7 +362,7 @@ async function dbGet() {
       id: d.identifiant, type: d.type, addr: d.adresse,
       diam: d.diametre, pres: d.pression, ok: d.etat,
       notes: d.notes, lat: d.latitude, lng: d.longitude,
-      added: d.date_ajout, _dbid: d.id
+      added: d.date_ajout, capacite: d.capacite, _dbid: d.id
     }));
   } catch(e) { setError(); console.error(e); return null; }
 }
@@ -342,7 +377,7 @@ async function dbInsert(h) {
         identifiant: h.id, type: h.type, adresse: h.addr,
         diametre: h.diam, pression: h.pres || '', etat: h.ok,
         notes: h.notes || '', latitude: h.lat, longitude: h.lng,
-        date_ajout: h.added
+        date_ajout: h.added, capacite: h.capacite || ''
       })
     });
     if (!r.ok) throw new Error(await r.text());
@@ -359,7 +394,7 @@ async function dbUpdate(h) {
       body: JSON.stringify({
         type: h.type, adresse: h.addr, diametre: h.diam,
         pression: h.pres || '', etat: h.ok, notes: h.notes || '',
-        latitude: h.lat, longitude: h.lng
+        latitude: h.lat, longitude: h.lng, capacite: h.capacite || ''
       })
     });
     if (!r.ok) throw new Error(await r.text());
@@ -547,6 +582,7 @@ function showDetail(id) {
       <div class="sheet-field"><label>Diamètre</label><span>${h.diam}</span></div>
       <div class="sheet-field"><label>Pression</label><span>${h.pres ? h.pres + ' bar' : '—'}</span></div>
       <div class="sheet-field"><label>État</label><span class="status-badge ${h.ok?'status-ok':'status-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
+      ${h.capacite ? `<div class="sheet-field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>` : ''}
     </div>
     ${h.notes ? `<div class="sheet-notes">📝 ${h.notes}</div>` : ''}
     <button class="btn-primary" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer vers ce point d'eau</button>
@@ -600,6 +636,20 @@ function selType(t) {
   ['poteau','borne','reservoir'].forEach(x => document.getElementById('t-'+x).className = 'radio-option');
   document.getElementById('t-'+t).classList.add('sel-type');
   if (!document.getElementById('edit-id').value) document.getElementById('f-id').value = genId(t);
+  // Show capacity field only for reservoir
+  document.getElementById('section-capacite').style.display = t === 'reservoir' ? 'block' : 'none';
+}
+
+function toggleAnomalie(el, val) {
+  el.classList.toggle('selected');
+}
+
+function getAnomalies() {
+  return Array.from(document.querySelectorAll('.anomalie-chip.selected')).map(el => el.textContent.trim()).join(', ');
+}
+
+function resetAnomalies() {
+  document.querySelectorAll('.anomalie-chip').forEach(el => el.classList.remove('selected'));
 }
 function selEtat(e) {
   selectedEtat = e;
@@ -616,8 +666,10 @@ function resetForm() {
   document.getElementById('e-ok').className = 'radio-option sel-ok';
   document.getElementById('e-hs').className = 'radio-option';
   document.getElementById('f-id').value = genId('poteau');
-  ['f-addr','f-pres','f-notes'].forEach(id => document.getElementById(id).value = '');
+  ['f-addr','f-pres','f-notes','f-capacite'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-diam').value = '100 mm';
+  document.getElementById('section-capacite').style.display = 'none';
+  resetAnomalies();
   locateMe();
 }
 async function submitForm() {
@@ -628,7 +680,13 @@ async function submitForm() {
   const editId = document.getElementById('edit-id').value;
   const lat = parseFloat(document.getElementById('f-lat').value) || myLat;
   const lng = parseFloat(document.getElementById('f-lng').value) || myLng;
-  const h = { id, addr, type: selectedType, ok: selectedEtat === 'ok', diam: document.getElementById('f-diam').value, pres: document.getElementById('f-pres').value, notes: document.getElementById('f-notes').value.trim(), lat, lng, added: editId ? undefined : new Date().toLocaleDateString('fr-FR') };
+  const anomalies = getAnomalies();
+  const capacite = document.getElementById('f-capacite').value;
+  const capaciteUnit = document.getElementById('f-capacite-unit').value;
+  const capaciteStr = capacite ? capacite + ' ' + capaciteUnit : '';
+  const notesRaw = document.getElementById('f-notes').value.trim();
+  const notes = [anomalies ? '⚠️ Anomalies: ' + anomalies : '', notesRaw].filter(Boolean).join(' | ');
+  const h = { id, addr, type: selectedType, ok: selectedEtat === 'ok', diam: document.getElementById('f-diam').value, pres: document.getElementById('f-pres').value, notes, capacite: capaciteStr, lat, lng, added: editId ? undefined : new Date().toLocaleDateString('fr-FR') };
   showToast('⏳ Enregistrement...');
   if (editId) {
     const ok = await dbUpdate(h);
@@ -772,6 +830,9 @@ function onOrientation(e) {
   // Only update if change > 2° to avoid micro-jitter
   if (Math.abs(smoothed - lastHeading) < 2) return;
   lastHeading = smoothed;
+  // Rotate the whole compass SVG so the needle points in travel direction
+  const svg = document.getElementById('compass-svg');
+  if (svg) svg.style.transform = `rotate(${smoothed}deg)`;
   if (mapObj.setBearing) mapObj.setBearing(smoothed);
 }
 

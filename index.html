@@ -168,14 +168,95 @@
   .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; color: var(--gray-600); }
   .spinner { width: 36px; height: 36px; border: 3px solid var(--gray-200); border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* LOGIN */
+  #login-screen { position: fixed; inset: 0; background: var(--red); z-index: 9000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+  #login-screen.hidden { display: none; }
+  .login-logo { width: 90px; height: 90px; border-radius: 50%; margin-bottom: 16px; object-fit: cover; border: 3px solid rgba(255,255,255,0.3); }
+  .login-title { font-size: 28px; font-weight: 800; color: white; margin-bottom: 4px; letter-spacing: -0.5px; }
+  .login-sub { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 32px; }
+  .login-card { background: white; border-radius: 20px; padding: 24px; width: 100%; max-width: 340px; box-shadow: var(--shadow-lg); }
+  .login-card-title { font-size: 15px; font-weight: 700; color: var(--gray-900); margin-bottom: 16px; text-align: center; }
+  .user-select { width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; -webkit-appearance: none; appearance: none; margin-bottom: 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .pin-display { display: flex; justify-content: center; gap: 12px; margin-bottom: 20px; }
+  .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gray-300); background: transparent; transition: all 0.15s; }
+  .pin-dot.filled { background: var(--red); border-color: var(--red); }
+  .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .pin-btn { height: 60px; border: none; border-radius: var(--radius); background: var(--gray-100); font-size: 24px; font-weight: 600; color: var(--gray-900); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 0.1s; display: flex; align-items: center; justify-content: center; }
+  .pin-btn:active { background: var(--gray-200); transform: scale(0.96); }
+  .pin-btn.del { background: var(--red-light); color: var(--red); }
+  .pin-btn.empty { background: transparent; cursor: default; }
+  .login-error { text-align: center; color: var(--red); font-size: 13px; font-weight: 600; min-height: 18px; }
+  /* USER BADGE */
+  #user-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.15); border-radius: 20px; padding: 4px 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  #user-badge span { font-size: 11px; font-weight: 600; color: white; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* ADMIN SCREEN */
+  .admin-section { padding: 16px; }
+  .admin-card { background: white; border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+  .admin-card h3 { font-size: 14px; font-weight: 700; color: var(--gray-800); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .user-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
+  .user-row:last-child { border-bottom: none; }
+  .user-avatar { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: white; flex-shrink: 0; }
+  .role-pompier { background: #2563EB; }
+  .role-gestionnaire { background: #D97706; }
+  .role-admin { background: #DC2626; }
+  .user-info { flex: 1; }
+  .user-name { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+  .user-role { font-size: 12px; color: var(--gray-400); }
+  .anomalie-row { padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
+  .anomalie-row:last-child { border-bottom: none; }
+  .anomalie-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+  .anomalie-name { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+  .statut-chip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+  .statut-en_cours { background: var(--orange-light); color: var(--orange); }
+  .statut-resolu { background: var(--green-light); color: var(--green); }
+  .anomalie-meta { font-size: 12px; color: var(--gray-400); }
 </style>
 </head>
 <body>
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <img src="apple-touch-icon.png" class="login-logo" alt="FireHydrant" onerror="this.style.display='none'"/>
+  <div class="login-title">FireHydrant</div>
+  <div class="login-sub">Points d'eau incendie 🇫🇷</div>
+  <div class="login-card">
+    <div class="login-card-title">Connexion</div>
+    <select class="user-select" id="login-user-select">
+      <option value="">Sélectionnez votre nom...</option>
+    </select>
+    <div class="pin-display">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn empty"></button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn del" onclick="pinDel()">⌫</button>
+    </div>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
 <div id="app">
   <div id="header">
-    <img src="apple-touch-icon.png" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;" alt="FireHydrant"/>
+    <img src="apple-touch-icon.png" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;object-fit:cover;" alt="FireHydrant" onerror="this.style.display='none';document.getElementById('header-icon-fallback').style.display='block'"/>
+    <span id="header-icon-fallback" style="display:none;font-size:24px;">🔥</span>
     <div id="header-title">FireHydrant</div>
     <div id="sync-indicator" title="Connecté à Supabase"></div>
+    <div id="user-badge" onclick="logout()">
+      <span id="user-badge-name">—</span>
+      <span>⏏</span>
+    </div>
     <span id="count-badge">0 point</span>
   </div>
 
@@ -380,6 +461,47 @@
     </div>
   </div>
 
+    <!-- ADMIN SCREEN -->
+    <div class="screen" id="screen-admin">
+      <div class="page-title">Gestion 👨‍💼</div>
+      <div class="admin-section">
+        <div class="admin-card">
+          <h3>👥 Utilisateurs</h3>
+          <div id="admin-users-list"><div style="color:var(--gray-400);font-size:13px;">Chargement...</div></div>
+          <button class="btn-primary" style="margin-top:12px;" onclick="showAddUser()">➕ Ajouter un utilisateur</button>
+        </div>
+        <div class="admin-card">
+          <h3>⚠️ Anomalies signalées</h3>
+          <div id="admin-anomalies-list"><div style="color:var(--gray-400);font-size:13px;">Chargement...</div></div>
+        </div>
+        <button class="btn-danger" style="margin:0 0 16px;" onclick="logout()">⏏ Se déconnecter</button>
+      </div>
+    </div>
+
+    <!-- ADD USER MODAL -->
+    <div id="add-user-sheet" style="position:absolute;inset:0;z-index:700;background:white;display:none;overflow-y:auto;">
+      <div style="background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;">
+        <button onclick="document.getElementById('add-user-sheet').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;">✕</button>
+        <span style="font-size:16px;font-weight:700;">Nouvel utilisateur</span>
+      </div>
+      <div style="padding:16px;">
+        <div class="form-section"><label class="form-label">Prénom</label><input class="form-input" id="new-prenom" type="text" placeholder="Ex: Jean"/></div>
+        <div class="form-section"><label class="form-label">Nom</label><input class="form-input" id="new-nom" type="text" placeholder="Ex: Dupont"/></div>
+        <div class="form-section">
+          <label class="form-label">Rôle</label>
+          <select class="form-select" id="new-role">
+            <option value="pompier">👨‍🚒 Pompier</option>
+            <option value="gestionnaire">👨‍💼 Gestionnaire</option>
+            <option value="admin">👑 Admin</option>
+          </select>
+        </div>
+        <div class="form-section"><label class="form-label">Code PIN (4 chiffres)</label><input class="form-input" id="new-pin" type="number" placeholder="Ex: 1234" maxlength="4"/></div>
+        <button class="btn-primary" onclick="saveNewUser()">✓ Créer le compte</button>
+      </div>
+    </div>
+
+  </div>
+
   <div id="bottom-nav">
     <button class="nav-btn active" id="nav-map" onclick="switchTab('map')">
       <svg viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
@@ -396,6 +518,10 @@
     <button class="nav-btn" id="nav-list" onclick="switchTab('list')">
       <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
       Liste<div class="dot"></div>
+    </button>
+    <button class="nav-btn" id="nav-admin" style="display:none;" onclick="switchTab('admin')">
+      <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Gestion<div class="dot"></div>
     </button>
   </div>
 </div>

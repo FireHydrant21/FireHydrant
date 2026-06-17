@@ -9,7 +9,11 @@
 <title>FireHydrant — Points d'eau incendie</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<link rel="manifest" href="manifest.json"/>
 <meta name="apple-mobile-web-app-title" content="FireHydrant"/>
+<link rel="manifest" href="manifest.json"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
@@ -899,14 +903,14 @@ function showDetail(id) {
   const h = hydrants.find(x => x.id === id);
   if (!h) return;
   const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
-  const dist = (myLat && h.lat) ? fmtDist(haversine(myLat, myLng, h.lat, h.lng)) : null;
+  const crowDist = (myLat && h.lat) ? fmtDist(haversine(myLat, myLng, h.lat, h.lng)) : null;
   document.getElementById('sheet-content').innerHTML = `
     <div class="sheet-header">
       <div class="sheet-icon" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${emoji}</div>
       <div><div class="sheet-title">${h.id}</div><div class="sheet-sub">${h.addr}</div></div>
     </div>
     ${h.photo_url ? `<img src="${h.photo_url}" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--radius);margin-bottom:14px;" onclick="window.open('${h.photo_url}','_blank')" />` : ''}
-    ${dist ? `<div class="dist-banner">📍 À <strong>${dist}</strong> de votre position actuelle</div>` : ''}
+    ${crowDist ? `<div class="dist-banner" id="dist-banner-${id}">⏳ Calcul de la distance par la route...</div>` : ''}
     <div class="sheet-grid">
       <div class="sheet-field"><label>Type</label><span>${capitalize(h.type)}</span></div>
       <div class="sheet-field"><label>Diamètre</label><span>${h.diam}</span></div>
@@ -922,6 +926,17 @@ function showDetail(id) {
   document.getElementById('nearest-banner').classList.remove('show');
   document.getElementById('overlay').classList.add('show');
   document.getElementById('bottom-sheet').classList.add('show');
+  // Fetch real road distance in background
+  if (myLat && h.lat) {
+    getRoadDistance(myLat, myLng, h.lat, h.lng).then(roadDist => {
+      const banner = document.getElementById('dist-banner-' + id);
+      if (banner) {
+        banner.innerHTML = roadDist
+          ? `🚗 À <strong>${fmtDist(roadDist)}</strong> par la route`
+          : `📍 À <strong>${crowDist}</strong> à vol d'oiseau`;
+      }
+    });
+  }
 }
 function closeSheet() { document.getElementById('bottom-sheet').classList.remove('show'); document.getElementById('overlay').classList.remove('show'); }
 
@@ -1413,6 +1428,13 @@ async function autoHighlightNearest() {
   if (!myLat) return;
   const best = await findNearestByRoad();
   if (best) { nearestId = best.id; renderMarkers(); }
+}
+
+// ── SERVICE WORKER (PWA) ──────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

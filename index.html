@@ -403,6 +403,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <h2>Nouveau point d'eau</h2>
   </div>
   <div class="qa-body">
+    <input type="hidden" id="qa-editing-id" value=""/>
     <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px" id="qa-coord"></div>
     <div class="qa-sec">Type de point d'eau</div>
     <div class="type-grid">
@@ -506,30 +507,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 <div id="toast"></div>
 
-<!-- BOTTOM NAV -->
-<nav id="bottom-nav">
-  <button class="nav-btn active" id="nav-map" onclick="goTab('map')">
-    <svg viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-    Carte<div class="dot"></div>
-  </button>
-  <button class="nav-btn" id="nav-list" onclick="goTab('list')">
-    <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
-    Liste<div class="dot"></div>
-  </button>
-  <button class="nav-btn" id="nav-add-btn" onclick="openAdd()">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
-    Ajouter<div class="dot"></div>
-  </button>
-  <button class="nav-btn" id="nav-admin" onclick="goTab('admin')" style="display:none">
-    <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-    Gestion<div class="dot"></div>
-  </button>
-  <button class="nav-btn" id="nav-profil" onclick="goTab('profil')">
-    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    Mon compte<div class="dot"></div>
-  </button>
-</nav>
-
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const SUPA_URL = 'https://unhuhvpifraxbeiznmge.supabase.co';
@@ -622,10 +599,11 @@ async function loadUsers() {
 function loginSuccess() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('user-badge').textContent = currentUser.nom;
+  const navAdmin = document.getElementById('nav-admin');
   if(currentUser.role==='admin'||currentUser.role==='gestionnaire') {
-    document.getElementById('nav-admin').style.display='flex';
+    navAdmin.style.display='flex';
   } else {
-    document.getElementById('nav-admin').style.display='none';
+    navAdmin.style.display='none';
   }
   startApp();
 }
@@ -887,7 +865,21 @@ function closeDetail() {
 }
 
 function editH(id) {
-  showToast('Modification — utilisez le formulaire Ajouter pour modifier');
+  const h = hydrants.find(x=>x.id===id);
+  if(!h) return;
+  closeAll();
+  openAdd();
+  // Pre-fill form
+  setTimeout(()=>{
+    document.getElementById('qa-id').value = h.id;
+    document.getElementById('qa-addr').value = h.addr;
+    document.getElementById('qa-diam').value = h.diam;
+    document.getElementById('qa-pres').value = h.pres||'';
+    selType(h.type, document.getElementById('qt-'+h.type));
+    if(!h.ok) selEtat('hs'); else selEtat('ok');
+    document.getElementById('qa-notes').value = h.notes||'';
+    document.getElementById('qa-editing-id').value = h.id;
+  }, 300);
 }
 
 async function delH(id) {

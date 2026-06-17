@@ -1438,6 +1438,11 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/FireHydrant/sw.js').catch(err => console.log('SW:', err));
+}
+
 async function init() {
   await loadUsers();
   // Check for existing session

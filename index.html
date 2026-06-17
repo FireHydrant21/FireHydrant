@@ -760,7 +760,8 @@ function quickSelType(type, el) {
 async function confirmQuickAdd() {
   if (!quickType) { showToast('Choisissez un type de point d\'eau'); return; }
   const addr = document.getElementById('qa-addr').value.trim() || (quickLat.toFixed(4) + ', ' + quickLng.toFixed(4));
-  const anomalies = Array.from(document.querySelectorAll('#qa-anomalie-chips .anomalie-chip.selected')).map(el => el.dataset.val).join(', ');
+  const anomaliesSelected = Array.from(document.querySelectorAll('#qa-anomalie-chips .anomalie-chip.selected')).map(el => el.dataset.val);
+  const anomalies = anomaliesSelected.join(', ');
   const notes = document.getElementById('qa-notes').value.trim();
   const notesStr = [anomalies ? '⚠️ Anomalies: ' + anomalies : '', notes].filter(Boolean).join(' | ');
   const capaciteVal = document.getElementById('qa-capacite').value;
@@ -773,7 +774,24 @@ async function confirmQuickAdd() {
   const ok = await dbInsert(h);
   if (ok) {
     hydrants.push(h); updateBadge(); renderMarkers(); renderList();
-    showToast('✓ ' + h.id + ' ajouté et partagé !');
+    // Si anomalies, les enregistrer dans la table anomalies pour les gestionnaires
+    if (anomaliesSelected.length > 0) {
+      for (const anomalie of anomaliesSelected) {
+        await fetch(SUPA_URL + '/rest/v1/anomalies', {
+          method: 'POST', headers: HEADERS,
+          body: JSON.stringify({
+            poteau_id: h.id, poteau_addr: addr,
+            type_anomalie: anomalie,
+            description: notes,
+            signale_par: currentUser ? currentUser.nom : 'Inconnu',
+            caserne_id: 1, statut: 'en_cours'
+          })
+        });
+      }
+      showToast('⚠️ ' + anomaliesSelected.length + ' anomalie(s) signalée(s) aux gestionnaires');
+    } else {
+      showToast('✓ ' + h.id + ' ajouté et partagé !');
+    }
     mapObj.setView([h.lat, h.lng], 16);
     setTimeout(() => showDetail(h.id), 500);
   } else { showToast('❌ Erreur de connexion'); }
@@ -831,25 +849,41 @@ async function getRoadDistance(lat1, lng1, lat2, lng2) {
   return null;
 }
 
+async function findNearestByRoad() {
+  if (!myLat) return null;
+  const ops = hydrants.filter(h => h.ok && h.lat && h.lng);
+  if (!ops.length) return null;
+  // Pre-filter: keep only 5 closest by straight line to avoid too many API calls
+  ops.forEach(h => h._crow = haversine(myLat, myLng, h.lat, h.lng));
+  ops.sort((a, b) => a._crow - b._crow);
+  const candidates = ops.slice(0, 5);
+  // Get road distances for candidates
+  let best = null, bestRoadDist = Infinity;
+  for (const h of candidates) {
+    const d = await getRoadDistance(myLat, myLng, h.lat, h.lng);
+    if (d !== null && d < bestRoadDist) { bestRoadDist = d; best = h; best._roadDist = d; }
+  }
+  // Fallback to straight line if OSRM fails
+  if (!best) { best = candidates[0]; best._roadDist = null; }
+  return best;
+}
+
 async function findNearest() {
   closeAll();
   const ops = hydrants.filter(h => h.ok && h.lat && h.lng);
   if (!ops.length) { showToast('Aucun point d\'eau opérationnel'); return; }
   if (!myLat) { showToast('Position GPS en cours...'); locateMe(); return; }
-  // First find nearest by straight line (fast)
-  let best = null, bestDist = Infinity;
-  ops.forEach(h => { const d = haversine(myLat, myLng, h.lat, h.lng); if (d < bestDist) { bestDist = d; best = h; } });
+  showToast('⏳ Calcul de l\'itinéraire...');
+  const best = await findNearestByRoad();
+  if (!best) { showToast('Aucun poteau trouvé'); return; }
   nearestId = best.id; renderMarkers();
   mapObj.setView([best.lat, best.lng], 16);
   document.getElementById('nearest-name').textContent = best.id + ' — ' + best.addr;
-  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">⏳ Calcul itinéraire...</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
+  const distLabel = best._roadDist ? '🚗 ' + fmtDist(best._roadDist) : '📍 ' + fmtDist(best._crow);
+  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">${distLabel}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
   document.getElementById('nearest-nav-btn').onclick = () => navigate(best.lat, best.lng);
   document.getElementById('overlay').classList.add('show');
   document.getElementById('nearest-banner').classList.add('show');
-  // Then get road distance
-  const roadDist = await getRoadDistance(myLat, myLng, best.lat, best.lng);
-  const distLabel = roadDist ? '🚗 ' + fmtDist(roadDist) : '📍 ' + fmtDist(bestDist) + ' (vol d\'oiseau)';
-  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">${distLabel}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
 }
 function closeNearest() { document.getElementById('nearest-banner').classList.remove('show'); document.getElementById('overlay').classList.remove('show'); nearestId = null; renderMarkers(); }
 function closeAll() { closeSheet(); closeNearest(); cancelQuickAdd(); if (addMode) toggleAddMode(); }
@@ -925,6 +959,18 @@ async function submitForm() {
     else { showToast('❌ Erreur'); return; }
   }
   updateBadge(); renderMarkers(); renderList();
+  // Enregistrer anomalies si nouveau poteau avec anomalies
+  if (!editId) {
+    const anomaliesSelected = Array.from(document.querySelectorAll('#anomalie-chips .anomalie-chip.selected')).map(el => el.dataset.val);
+    if (anomaliesSelected.length > 0) {
+      for (const anomalie of anomaliesSelected) {
+        await fetch(SUPA_URL + '/rest/v1/anomalies', {
+          method: 'POST', headers: HEADERS,
+          body: JSON.stringify({ poteau_id: h.id, poteau_addr: h.addr, type_anomalie: anomalie, signale_par: currentUser ? currentUser.nom : 'Inconnu', caserne_id: 1, statut: 'en_cours' })
+        });
+      }
+    }
+  }
   showToast(editId ? '✓ Modifié et synchronisé !' : '✓ Ajouté et partagé !');
   resetForm(); switchTab('map');
   if (h.lat && h.lng) mapObj.setView([h.lat, h.lng], 16);
@@ -1243,10 +1289,21 @@ async function startApp() {
   if (data) {
     hydrants = data; updateBadge(); renderMarkers(); renderList();
     showToast('✅ ' + hydrants.length + ' point(s) chargé(s)');
+    // Auto-highlight nearest once GPS is ready
+    autoHighlightNearest();
   } else {
     showToast('❌ Impossible de charger les données');
   }
   document.getElementById('f-id').value = genId('poteau');
+}
+
+async function autoHighlightNearest() {
+  // Wait for GPS (max 10s)
+  let waited = 0;
+  while (!myLat && waited < 10000) { await new Promise(r => setTimeout(r, 500)); waited += 500; }
+  if (!myLat) return;
+  const best = await findNearestByRoad();
+  if (best) { nearestId = best.id; renderMarkers(); }
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

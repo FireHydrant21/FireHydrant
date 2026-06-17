@@ -257,9 +257,8 @@
     <span id="header-icon-fallback" style="display:none;font-size:24px;">🔥</span>
     <div id="header-title">FireHydrant</div>
     <div id="sync-indicator" title="Connecté à Supabase"></div>
-    <div id="user-badge" onclick="showUserMenu()">
+    <div id="user-badge">
       <span id="user-badge-name">—</span>
-      <span>⏏</span>
     </div>
     <span id="count-badge">0 point</span>
   </div>
@@ -556,6 +555,29 @@
       </div>
     </div>
 
+    <!-- PROFIL SCREEN -->
+    <div class="screen" id="screen-profil">
+      <div class="page-title">Mon compte</div>
+      <div style="padding:0 16px 80px;">
+        <div class="admin-card" style="margin-top:16px;">
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 0;">
+            <div id="profil-avatar" style="width:56px;height:56px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;flex-shrink:0;">?</div>
+            <div>
+              <div id="profil-nom" style="font-size:18px;font-weight:700;color:var(--gray-900);">—</div>
+              <div id="profil-role" style="font-size:13px;color:var(--gray-400);margin-top:2px;">—</div>
+              <div style="font-size:12px;color:var(--gray-400);">Caserne de Nolay • SDIS 21</div>
+            </div>
+          </div>
+        </div>
+        <div class="admin-card">
+          <h3>🔑 Changer mon code PIN</h3>
+          <p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Modifiez votre code PIN de connexion</p>
+          <button class="btn-primary" onclick="showChangePin()">🔑 Changer mon PIN</button>
+        </div>
+        <button class="btn-danger" style="margin-top:8px;" onclick="logout()">⏏ Se déconnecter</button>
+      </div>
+    </div>
+
   </div>
 
   <div id="bottom-nav">
@@ -578,6 +600,10 @@
     <button class="nav-btn" id="nav-admin" onclick="switchTab('admin')">
       <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       Gestion<div class="dot"></div>
+    </button>
+    <button class="nav-btn" id="nav-profil" onclick="switchTab('profil')">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Mon compte<div class="dot"></div>
     </button>
   </div>
 </div>
@@ -931,9 +957,13 @@ function showDetail(id) {
     getRoadDistance(myLat, myLng, h.lat, h.lng).then(roadDist => {
       const banner = document.getElementById('dist-banner-' + id);
       if (banner) {
-        banner.innerHTML = roadDist
-          ? `🚗 À <strong>${fmtDist(roadDist)}</strong> par la route`
-          : `📍 À <strong>${crowDist}</strong> à vol d'oiseau`;
+        if (roadDist) {
+          banner.innerHTML = `🚗 À <strong>${fmtDist(roadDist)}</strong> par la route`;
+        } else {
+          banner.innerHTML = `⚠️ Distance routière indisponible`;
+          banner.style.background = 'var(--orange-light)';
+          banner.style.color = 'var(--orange)';
+        }
       }
     });
   }
@@ -989,7 +1019,7 @@ async function findNearest() {
   nearestId = best.id; renderMarkers();
   mapObj.setView([best.lat, best.lng], 16);
   document.getElementById('nearest-name').textContent = best.id + ' — ' + best.addr;
-  const distLabel = best._roadDist ? '🚗 ' + fmtDist(best._roadDist) : '📍 ' + fmtDist(best._crow);
+  const distLabel = best._roadDist ? '🚗 ' + fmtDist(best._roadDist) : '⚠️ Distance indisponible';
   document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">${distLabel}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
   document.getElementById('nearest-nav-btn').onclick = () => navigate(best.lat, best.lng);
   document.getElementById('overlay').classList.add('show');
@@ -1240,13 +1270,15 @@ function onLoginSuccess() {
   startApp();
 }
 
-function showUserMenu() {
-  const choice = confirm('Que souhaitez-vous faire ?\n\nOK = Changer mon PIN\nAnnuler = Se déconnecter');
-  if (choice) showChangePin();
-  else logout();
+function loadProfilData() {
+  if (!currentUser) return;
+  const roleEmoji = { pompier: '👨‍🚒', gestionnaire: '👨‍💼', admin: '👑' };
+  const roleColor = { pompier: '#2563EB', gestionnaire: '#D97706', admin: '#DC2626' };
+  document.getElementById('profil-avatar').textContent = currentUser.nom.charAt(0).toUpperCase();
+  document.getElementById('profil-avatar').style.background = roleColor[currentUser.role] || '#888';
+  document.getElementById('profil-nom').textContent = currentUser.nom;
+  document.getElementById('profil-role').textContent = (roleEmoji[currentUser.role] || '') + ' ' + capitalize(currentUser.role);
 }
-
-function logout() {
   if (!confirm('Se déconnecter ?')) return;
   clearSession();
   currentUser = null;
@@ -1364,7 +1396,7 @@ function switchTab(tab) {
   if (tab === 'admin' && currentUser && currentUser.role === 'pompier') {
     showToast('⛔ Accès réservé aux gestionnaires'); return;
   }
-  ['map','list','add','admin'].forEach(t => {
+  ['map','list','add','admin','profil'].forEach(t => {
     const s = document.getElementById('screen-'+t);
     const n = document.getElementById('nav-'+t);
     if (s) s.classList.toggle('active', t === tab);
@@ -1373,7 +1405,17 @@ function switchTab(tab) {
   if (tab === 'add' && !document.getElementById('edit-id').value) resetForm();
   if (tab === 'list') renderList();
   if (tab === 'admin') loadAdminData();
+  if (tab === 'profil') updateProfilScreen();
   if (tab === 'map') { closeAll(); setTimeout(() => mapObj.invalidateSize(), 50); }
+}
+
+function updateProfilScreen() {
+  if (!currentUser) return;
+  const roleEmoji = { pompier: '👨‍🚒', gestionnaire: '👨‍💼', admin: '👑' };
+  const roleLabel = { pompier: 'Pompier', gestionnaire: 'Gestionnaire', admin: 'Administrateur' };
+  document.getElementById('profil-avatar').textContent = currentUser.nom.charAt(0).toUpperCase();
+  document.getElementById('profil-nom').textContent = currentUser.nom;
+  document.getElementById('profil-role').textContent = (roleEmoji[currentUser.role] || '') + ' ' + (roleLabel[currentUser.role] || currentUser.role);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────

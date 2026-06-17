@@ -361,6 +361,16 @@
           <div class="qa-section-title">Notes complémentaires</div>
           <textarea class="qa-input" id="qa-notes" rows="3" placeholder="Informations supplémentaires..." style="resize:none;"></textarea>
 
+          <div class="qa-section-title">Photo 📷</div>
+          <div id="qa-photo-preview" style="display:none;margin-bottom:8px;">
+            <img id="qa-photo-img" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);"/>
+            <button onclick="clearPhoto()" style="width:100%;margin-top:6px;padding:8px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer;">✕ Supprimer la photo</button>
+          </div>
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:var(--gray-100);border:2px dashed var(--gray-200);border-radius:var(--radius);font-size:14px;color:var(--gray-600);cursor:pointer;">
+            📷 Prendre ou choisir une photo
+            <input type="file" id="qa-photo" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)"/>
+          </label>
+
           <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
           <button class="btn-primary" onclick="confirmQuickAdd()">✓ Enregistrer le point d'eau</button>
           <button class="btn-secondary" onclick="cancelQuickAdd()" style="margin-top:8px;margin-bottom:16px;">Annuler</button>
@@ -574,7 +584,7 @@ async function dbGet() {
       id: d.identifiant, type: d.type, addr: d.adresse,
       diam: d.diametre, pres: d.pression, ok: d.etat,
       notes: d.notes, lat: d.latitude, lng: d.longitude,
-      added: d.date_ajout, capacite: d.capacite, _dbid: d.id
+      added: d.date_ajout, capacite: d.capacite, photo_url: d.photo_url, _dbid: d.id
     }));
   } catch(e) { setError(); console.error(e); return null; }
 }
@@ -589,7 +599,7 @@ async function dbInsert(h) {
         identifiant: h.id, type: h.type, adresse: h.addr,
         diametre: h.diam, pression: h.pres || '', etat: h.ok,
         notes: h.notes || '', latitude: h.lat, longitude: h.lng,
-        date_ajout: h.added, capacite: h.capacite || ''
+        date_ajout: h.added, capacite: h.capacite || '', photo_url: h.photo_url || ''
       })
     });
     if (!r.ok) throw new Error(await r.text());
@@ -730,6 +740,38 @@ function goToPlace(lat, lng, name) {
 }
 document.addEventListener('click', e => { if (!document.getElementById('map-search-wrap').contains(e.target)) document.getElementById('map-search-results').classList.remove('show'); });
 
+// ── PHOTO ─────────────────────────────────────────────────────────────────────
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('qa-photo-img').src = e.target.result;
+    document.getElementById('qa-photo-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  document.getElementById('qa-photo').value = '';
+  document.getElementById('qa-photo-preview').style.display = 'none';
+  document.getElementById('qa-photo-img').src = '';
+}
+
+async function uploadPhoto(file, hydrantId) {
+  try {
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${hydrantId}_${Date.now()}.${ext}`;
+    const r = await fetch(`${SUPA_URL}/storage/v1/object/photos/${path}`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': file.type },
+      body: file
+    });
+    if (r.ok) return `${SUPA_URL}/storage/v1/object/public/photos/${path}`;
+  } catch(e) { console.error(e); }
+  return null;
+}
+
 // ── ADD MODE ──────────────────────────────────────────────────────────────────
 function toggleAddMode() {
   addMode = !addMode;
@@ -773,6 +815,18 @@ async function confirmQuickAdd() {
   showToast('⏳ Enregistrement...');
   const ok = await dbInsert(h);
   if (ok) {
+    // Upload photo if present
+    const photoInput = document.getElementById('qa-photo');
+    if (photoInput && photoInput.files && photoInput.files[0]) {
+      showToast('📷 Upload de la photo...');
+      const photoUrl = await uploadPhoto(photoInput.files[0], h.id);
+      if (photoUrl) {
+        h.photo_url = photoUrl;
+        await fetch(SUPA_URL + '/rest/v1/poteaux?identifiant=eq.' + encodeURIComponent(h.id), {
+          method: 'PATCH', headers: HEADERS, body: JSON.stringify({ photo_url: photoUrl })
+        });
+      }
+    }
     hydrants.push(h); updateBadge(); renderMarkers(); renderList();
     // Si anomalies, les enregistrer dans la table anomalies pour les gestionnaires
     if (anomaliesSelected.length > 0) {
@@ -806,6 +860,7 @@ function cancelQuickAdd() {
   document.getElementById('qa-notes').value = '';
   document.getElementById('qa-capacite').value = '';
   document.getElementById('qa-capacite-section').style.display = 'none';
+  clearPhoto();
 }
 
 // ── DETAIL SHEET ──────────────────────────────────────────────────────────────
@@ -819,6 +874,7 @@ function showDetail(id) {
       <div class="sheet-icon" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${emoji}</div>
       <div><div class="sheet-title">${h.id}</div><div class="sheet-sub">${h.addr}</div></div>
     </div>
+    ${h.photo_url ? `<img src="${h.photo_url}" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--radius);margin-bottom:14px;" onclick="window.open('${h.photo_url}','_blank')" />` : ''}
     ${dist ? `<div class="dist-banner">📍 À <strong>${dist}</strong> de votre position actuelle</div>` : ''}
     <div class="sheet-grid">
       <div class="sheet-field"><label>Type</label><span>${capitalize(h.type)}</span></div>

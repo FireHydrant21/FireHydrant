@@ -402,6 +402,7 @@
         <input type="hidden" id="edit-id"/>
         <input type="hidden" id="f-lat"/>
         <input type="hidden" id="f-lng"/>
+        <input type="hidden" id="f-photo-existing"/>
         <div class="form-section">
           <label class="form-label">Type</label>
           <div class="radio-group">
@@ -463,6 +464,17 @@
         <div class="form-section">
           <label class="form-label">Notes complémentaires</label>
           <textarea class="form-input" id="f-notes" rows="2" placeholder="Informations supplémentaires..."></textarea>
+        </div>
+        <div class="form-section">
+          <label class="form-label">Photo 📷</label>
+          <div id="f-photo-preview" style="display:none;margin-bottom:8px;">
+            <img id="f-photo-img" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);"/>
+            <button onclick="clearFormPhoto()" style="width:100%;margin-top:6px;padding:8px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer;">✕ Supprimer la photo</button>
+          </div>
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:var(--gray-100);border:2px dashed var(--gray-200);border-radius:var(--radius);font-size:14px;color:var(--gray-600);cursor:pointer;">
+            📷 Prendre ou choisir une photo
+            <input type="file" id="f-photo" accept="image/*" capture="environment" style="display:none;" onchange="previewFormPhoto(this)"/>
+          </label>
         </div>
         <div class="form-divider"></div>
         <button class="btn-primary" onclick="submitForm()">✓ <span id="submit-label">Enregistrer le point d'eau</span></button>
@@ -616,7 +628,8 @@ async function dbUpdate(h) {
       body: JSON.stringify({
         type: h.type, adresse: h.addr, diametre: h.diam,
         pression: h.pres || '', etat: h.ok, notes: h.notes || '',
-        latitude: h.lat, longitude: h.lng, capacite: h.capacite || ''
+        latitude: h.lat, longitude: h.lng, capacite: h.capacite || '',
+        photo_url: h.photo_url || ''
       })
     });
     if (!r.ok) throw new Error(await r.text());
@@ -756,6 +769,24 @@ function clearPhoto() {
   document.getElementById('qa-photo').value = '';
   document.getElementById('qa-photo-preview').style.display = 'none';
   document.getElementById('qa-photo-img').src = '';
+}
+
+function previewFormPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('f-photo-img').src = e.target.result;
+    document.getElementById('f-photo-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearFormPhoto() {
+  document.getElementById('f-photo').value = '';
+  document.getElementById('f-photo-preview').style.display = 'none';
+  document.getElementById('f-photo-img').src = '';
+  document.getElementById('f-photo-existing').value = '';
 }
 
 async function uploadPhoto(file, hydrantId) {
@@ -986,6 +1017,7 @@ function resetForm() {
   document.getElementById('f-diam').value = '100 mm';
   document.getElementById('section-capacite').style.display = 'none';
   resetAnomalies();
+  clearFormPhoto();
   locateMe();
 }
 async function submitForm() {
@@ -1002,7 +1034,7 @@ async function submitForm() {
   const capaciteStr = capacite ? capacite + ' ' + capaciteUnit : '';
   const notesRaw = document.getElementById('f-notes').value.trim();
   const notes = [anomalies ? '⚠️ Anomalies: ' + anomalies : '', notesRaw].filter(Boolean).join(' | ');
-  const h = { id, addr, type: selectedType, ok: selectedEtat === 'ok', diam: document.getElementById('f-diam').value, pres: document.getElementById('f-pres').value, notes, capacite: capaciteStr, lat, lng, added: editId ? undefined : new Date().toLocaleDateString('fr-FR') };
+  const h = { id, addr, type: selectedType, ok: selectedEtat === 'ok', diam: document.getElementById('f-diam').value, pres: document.getElementById('f-pres').value, notes, capacite: capaciteStr, lat, lng, added: editId ? undefined : new Date().toLocaleDateString('fr-FR'), photo_url: document.getElementById('f-photo-existing').value || '' };
   showToast('⏳ Enregistrement...');
   if (editId) {
     const ok = await dbUpdate(h);
@@ -1013,6 +1045,20 @@ async function submitForm() {
     const ok = await dbInsert(h);
     if (ok) hydrants.push(h);
     else { showToast('❌ Erreur'); return; }
+  }
+  // Upload new photo if selected
+  const photoInput = document.getElementById('f-photo');
+  if (photoInput && photoInput.files && photoInput.files[0]) {
+    showToast('📷 Upload de la photo...');
+    const photoUrl = await uploadPhoto(photoInput.files[0], h.id);
+    if (photoUrl) {
+      h.photo_url = photoUrl;
+      await fetch(SUPA_URL + '/rest/v1/poteaux?identifiant=eq.' + encodeURIComponent(h.id), {
+        method: 'PATCH', headers: HEADERS, body: JSON.stringify({ photo_url: photoUrl })
+      });
+      const i = hydrants.findIndex(x => x.id === h.id);
+      if (i >= 0) hydrants[i].photo_url = photoUrl;
+    }
   }
   updateBadge(); renderMarkers(); renderList();
   // Enregistrer anomalies si nouveau poteau avec anomalies
@@ -1044,6 +1090,13 @@ function editHydrant(id) {
   document.getElementById('f-diam').value = h.diam;
   document.getElementById('f-pres').value = h.pres || '';
   document.getElementById('f-notes').value = h.notes || '';
+  // Show existing photo if any
+  clearFormPhoto();
+  if (h.photo_url) {
+    document.getElementById('f-photo-existing').value = h.photo_url;
+    document.getElementById('f-photo-img').src = h.photo_url;
+    document.getElementById('f-photo-preview').style.display = 'block';
+  }
   if (h.lat) { document.getElementById('f-lat').value = h.lat; document.getElementById('f-lng').value = h.lng; document.getElementById('gps-text').textContent = h.lat.toFixed(5) + '° N, ' + h.lng.toFixed(5) + '° E'; }
   switchTab('add');
 }

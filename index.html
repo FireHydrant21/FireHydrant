@@ -942,16 +942,16 @@ function closeSheet() { document.getElementById('bottom-sheet').classList.remove
 
 // ── NEAREST ───────────────────────────────────────────────────────────────────
 async function getRoadDistance(lat1, lng1, lat2, lng2) {
-  // Essai 1 : OSRM public
+  // Utilise l'API GraphHopper (plus fiable qu'OSRM pour les courtes distances)
+  try {
+    const url = `https://graphhopper.com/api/1/route?point=${lat1},${lng1}&point=${lat2},${lng2}&vehicle=car&locale=fr&key=LijBPDQGfu7Iiq80ebFCtWMuznIk&type=json&instructions=false`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const d = await r.json();
+    if (d.paths && d.paths.length) return d.paths[0].distance;
+  } catch(e) {}
+  // Fallback OSRM
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    const d = await r.json();
-    if (d.routes && d.routes.length) return d.routes[0].distance;
-  } catch(e) {}
-  // Essai 2 : OSRM demo server
-  try {
-    const url = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
     const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
     const d = await r.json();
     if (d.routes && d.routes.length) return d.routes[0].distance;

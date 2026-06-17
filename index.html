@@ -953,9 +953,172 @@ function renderList() {
   }).join('');
 }
 
+// ── SESSION & AUTH ────────────────────────────────────────────────────────────
+const SESSION_KEY = 'fh_session';
+let currentUser = null;
+
+function saveSession(user) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+}
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; }
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+async function loadUsers() {
+  try {
+    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?select=*&actif=eq.true&order=nom', { headers: HEADERS });
+    const data = await r.json();
+    const sel = document.getElementById('login-user-select');
+    sel.innerHTML = '<option value="">Sélectionnez votre nom...</option>';
+    data.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.prenom ? u.prenom + ' ' + u.nom : u.nom;
+      opt.dataset.pin = u.pin;
+      opt.dataset.role = u.role;
+      opt.dataset.nom = u.prenom ? u.prenom + ' ' + u.nom : u.nom;
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.error(e); }
+}
+
+let pinValue = '';
+function pinPress(n) {
+  if (pinValue.length >= 4) return;
+  pinValue += n;
+  updatePinDisplay();
+  if (pinValue.length === 4) setTimeout(checkPin, 150);
+}
+function pinDel() {
+  pinValue = pinValue.slice(0, -1);
+  updatePinDisplay();
+  document.getElementById('login-error').textContent = '';
+}
+function updatePinDisplay() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('pd' + i).classList.toggle('filled', i < pinValue.length);
+  }
+}
+function checkPin() {
+  const sel = document.getElementById('login-user-select');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) {
+    document.getElementById('login-error').textContent = 'Sélectionnez votre nom';
+    pinValue = ''; updatePinDisplay(); return;
+  }
+  if (pinValue === opt.dataset.pin) {
+    const user = { id: opt.value, nom: opt.dataset.nom, role: opt.dataset.role };
+    currentUser = user;
+    saveSession(user);
+    onLoginSuccess();
+  } else {
+    document.getElementById('login-error').textContent = 'Code PIN incorrect';
+    pinValue = ''; updatePinDisplay();
+  }
+}
+
+function onLoginSuccess() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('user-badge-name').textContent = currentUser.nom;
+  // Show admin tab for gestionnaire and admin
+  if (currentUser.role === 'admin' || currentUser.role === 'gestionnaire') {
+    document.getElementById('nav-admin').style.display = 'flex';
+  }
+  startApp();
+}
+
+function logout() {
+  if (!confirm('Se déconnecter ?')) return;
+  clearSession();
+  currentUser = null;
+  pinValue = ''; updatePinDisplay();
+  document.getElementById('login-error').textContent = '';
+  document.getElementById('login-user-select').value = '';
+  document.getElementById('nav-admin').style.display = 'none';
+  document.getElementById('login-screen').classList.remove('hidden');
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
+async function loadAdminData() {
+  // Load users
+  try {
+    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?select=*&order=nom', { headers: HEADERS });
+    const users = await r.json();
+    const roleEmoji = { pompier: '👨‍🚒', gestionnaire: '👨‍💼', admin: '👑' };
+    const roleColor = { pompier: '#2563EB', gestionnaire: '#D97706', admin: '#DC2626' };
+    document.getElementById('admin-users-list').innerHTML = users.map(u => `
+      <div class="user-row">
+        <div class="user-avatar" style="background:${roleColor[u.role]||'#888'}">${(u.prenom||u.nom).charAt(0).toUpperCase()}</div>
+        <div class="user-info">
+          <div class="user-name">${u.prenom ? u.prenom + ' ' + u.nom : u.nom}</div>
+          <div class="user-role">${roleEmoji[u.role]||''} ${capitalize(u.role)}</div>
+        </div>
+        ${currentUser.role === 'admin' ? `<button onclick="deleteUser(${u.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">🗑</button>` : ''}
+      </div>`).join('');
+  } catch(e) {}
+  // Load anomalies
+  try {
+    const r = await fetch(SUPA_URL + '/rest/v1/anomalies?select=*&order=created_at.desc&limit=20', { headers: HEADERS });
+    const anomalies = await r.json();
+    if (!anomalies.length) { document.getElementById('admin-anomalies-list').innerHTML = '<div style="color:var(--gray-400);font-size:13px;">Aucune anomalie signalée</div>'; return; }
+    document.getElementById('admin-anomalies-list').innerHTML = anomalies.map(a => `
+      <div class="anomalie-row">
+        <div class="anomalie-top">
+          <div class="anomalie-name">${a.poteau_id || '—'}</div>
+          <div class="statut-chip statut-${a.statut}">${a.statut === 'en_cours' ? '⚠️ En cours' : '✅ Résolu'}</div>
+        </div>
+        <div class="anomalie-meta">${a.poteau_addr || ''} • ${a.type_anomalie || ''}</div>
+        <div class="anomalie-meta">${a.signale_par || ''} • ${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
+        ${a.statut === 'en_cours' ? `<button onclick="resolveAnomalie(${a.id})" style="margin-top:6px;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;">✅ Marquer résolu</button>` : ''}
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function resolveAnomalie(id) {
+  await fetch(SUPA_URL + '/rest/v1/anomalies?id=eq.' + id, {
+    method: 'PATCH', headers: HEADERS, body: JSON.stringify({ statut: 'resolu' })
+  });
+  loadAdminData(); showToast('✅ Anomalie résolue');
+}
+
+async function deleteUser(id) {
+  if (!confirm('Supprimer cet utilisateur ?')) return;
+  await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + id, { method: 'DELETE', headers: HEADERS });
+  loadAdminData(); loadUsers(); showToast('✓ Utilisateur supprimé');
+}
+
+function showAddUser() {
+  document.getElementById('add-user-form').style.display = 'block';
+  document.getElementById('add-user-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function createUser() {
+  const nom = document.getElementById('new-user-nom').value.trim();
+  const prenom = document.getElementById('new-user-prenom').value.trim();
+  const role = document.getElementById('new-user-role').value;
+  const pin = document.getElementById('new-user-pin').value.trim();
+  if (!nom || pin.length !== 4) { showToast('Remplissez tous les champs (PIN = 4 chiffres)'); return; }
+  const caserne_id = 1; // Caserne de Nolay
+  const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs', {
+    method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' },
+    body: JSON.stringify({ nom, prenom, pin, role, caserne_id, actif: true })
+  });
+  if (r.ok) {
+    showToast('✓ Compte créé !');
+    document.getElementById('add-user-form').style.display = 'none';
+    document.getElementById('new-user-nom').value = '';
+    document.getElementById('new-user-prenom').value = '';
+    document.getElementById('new-user-pin').value = '';
+    loadAdminData(); loadUsers();
+  } else showToast('❌ Erreur');
+}
+
 // ── NAV ───────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  ['map','list','add'].forEach(t => {
+  ['map','list','add','admin'].forEach(t => {
     const s = document.getElementById('screen-'+t);
     const n = document.getElementById('nav-'+t);
     if (s) s.classList.toggle('active', t === tab);
@@ -963,15 +1126,16 @@ function switchTab(tab) {
   });
   if (tab === 'add' && !document.getElementById('edit-id').value) resetForm();
   if (tab === 'list') renderList();
+  if (tab === 'admin') loadAdminData();
   if (tab === 'map') { closeAll(); setTimeout(() => mapObj.invalidateSize(), 50); }
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
-function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
 
 function resetNorth() {
-  if (mapObj.setBearing) { mapObj.setBearing(0); showToast('⬆️ Nord remis en haut'); }
+  if (mapObj && mapObj.setBearing) { mapObj.setBearing(0); showToast('⬆️ Nord remis en haut'); }
 }
 
 // ── COMPASS & FOLLOW MODE ─────────────────────────────────────────────────────
@@ -981,77 +1145,19 @@ let watchId = null;
 let lastHeading = 0;
 let headingBuffer = [];
 
-function toggleCompass() {
-  compassActive = !compassActive;
-  const btn = document.getElementById('btn-compass');
-  btn.classList.toggle('active-mode', compassActive);
-  if (compassActive) {
-    showToast('⬆️ Boussole activée');
-    headingBuffer = [];
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission().then(state => {
-        if (state === 'granted') {
-          window.addEventListener('deviceorientationabsolute', onOrientation, true);
-        } else {
-          showToast('⚠️ Permission boussole refusée');
-          compassActive = false;
-          btn.classList.remove('active-mode');
-        }
-      }).catch(() => showToast('⚠️ Boussole non disponible'));
-    } else {
-      window.addEventListener('deviceorientationabsolute', onOrientation, true);
-      window.addEventListener('deviceorientation', onOrientation, true);
-    }
-  } else {
-    showToast('Boussole désactivée');
-    window.removeEventListener('deviceorientationabsolute', onOrientation, true);
-    window.removeEventListener('deviceorientation', onOrientation, true);
-    if (mapObj.setBearing) mapObj.setBearing(0);
-  }
-}
-
-function onOrientation(e) {
-  if (!compassActive) return;
-  let heading = null;
-  if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
-    heading = e.webkitCompassHeading; // iOS — already absolute
-  } else if (e.absolute === true && e.alpha !== null) {
-    heading = (360 - e.alpha) % 360; // Android absolute
-  } else {
-    return; // Ignore relative events on Android
-  }
-  // Smooth heading with rolling average of last 5 values
-  headingBuffer.push(heading);
-  if (headingBuffer.length > 5) headingBuffer.shift();
-  // Circular mean to avoid 0/360 wrap issues
-  let sinSum = 0, cosSum = 0;
-  headingBuffer.forEach(h => { sinSum += Math.sin(h * Math.PI/180); cosSum += Math.cos(h * Math.PI/180); });
-  const smoothed = (Math.atan2(sinSum, cosSum) * 180/Math.PI + 360) % 360;
-  // Only update if change > 2° to avoid micro-jitter
-  if (Math.abs(smoothed - lastHeading) < 2) return;
-  lastHeading = smoothed;
-  // Rotate the whole compass SVG so the needle points in travel direction
-  const svg = document.getElementById('compass-svg');
-  if (svg) svg.style.transform = `rotate(${smoothed}deg)`;
-  if (mapObj.setBearing) mapObj.setBearing(smoothed);
-}
-
 function toggleFollow() {
   followActive = !followActive;
   const btn = document.getElementById('btn-follow');
   btn.classList.toggle('active-mode', followActive);
   if (followActive) {
-    showToast('📍 Suivi activé — carte centrée sur vous');
+    showToast('📍 Suivi activé');
     if (watchId) navigator.geolocation.clearWatch(watchId);
     watchId = navigator.geolocation.watchPosition(pos => {
-      myLat = pos.coords.latitude;
-      myLng = pos.coords.longitude;
+      myLat = pos.coords.latitude; myLng = pos.coords.longitude;
       updateMeMarker();
-      // Only re-center if follow is still active
       if (followActive) mapObj.panTo([myLat, myLng], { animate: true, duration: 0.5 });
       document.getElementById('gps-text').textContent = myLat.toFixed(5) + '° N, ' + myLng.toFixed(5) + '° E';
     }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
-    // Stop follow if user manually pans the map
     mapObj.once('dragstart', () => {
       if (followActive) { followActive = false; btn.classList.remove('active-mode'); showToast('Suivi désactivé'); if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; } }
     });
@@ -1061,19 +1167,29 @@ function toggleFollow() {
   }
 }
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
-async function init() {
+// ── START APP (after login) ───────────────────────────────────────────────────
+async function startApp() {
   initMap();
   showToast('🔄 Chargement des données...');
   const data = await dbGet();
   if (data) {
-    hydrants = data;
-    updateBadge(); renderMarkers(); renderList();
+    hydrants = data; updateBadge(); renderMarkers(); renderList();
     showToast('✅ ' + hydrants.length + ' point(s) chargé(s)');
   } else {
     showToast('❌ Impossible de charger les données');
   }
   document.getElementById('f-id').value = genId('poteau');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function init() {
+  await loadUsers();
+  // Check for existing session
+  const session = loadSession();
+  if (session) {
+    currentUser = session;
+    onLoginSuccess();
+  }
 }
 init();
 </script>

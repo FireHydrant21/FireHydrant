@@ -253,7 +253,7 @@
     <span id="header-icon-fallback" style="display:none;font-size:24px;">🔥</span>
     <div id="header-title">FireHydrant</div>
     <div id="sync-indicator" title="Connecté à Supabase"></div>
-    <div id="user-badge" onclick="logout()">
+    <div id="user-badge" onclick="showUserMenu()">
       <span id="user-badge-name">—</span>
       <span>⏏</span>
     </div>
@@ -474,17 +474,22 @@
           <h3>⚠️ Anomalies signalées</h3>
           <div id="admin-anomalies-list"><div style="color:var(--gray-400);font-size:13px;">Chargement...</div></div>
         </div>
-        <button class="btn-danger" style="margin:0 0 16px;" onclick="logout()">⏏ Se déconnecter</button>
+        <div class="admin-card">
+          <h3>🔑 Mon code PIN</h3>
+          <p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Modifier votre code PIN de connexion</p>
+          <button class="btn-primary" onclick="showChangePin()">🔑 Changer mon PIN</button>
+        </div>
+        <button class="btn-danger" style="margin:0 0 80px;" onclick="logout()">⏏ Se déconnecter</button>
       </div>
     </div>
 
-    <!-- ADD USER MODAL -->
-    <div id="add-user-sheet" style="position:absolute;inset:0;z-index:700;background:white;display:none;overflow-y:auto;">
-      <div style="background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;">
+    <!-- ADD USER SHEET -->
+    <div id="add-user-sheet" style="position:fixed;top:56px;left:0;right:0;bottom:58px;z-index:800;background:white;display:none;overflow-y:auto;">
+      <div style="background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1;">
         <button onclick="document.getElementById('add-user-sheet').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;">✕</button>
         <span style="font-size:16px;font-weight:700;">Nouvel utilisateur</span>
       </div>
-      <div style="padding:16px;">
+      <div style="padding:16px 16px 40px;">
         <div class="form-section"><label class="form-label">Prénom</label><input class="form-input" id="new-prenom" type="text" placeholder="Ex: Jean"/></div>
         <div class="form-section"><label class="form-label">Nom</label><input class="form-input" id="new-nom" type="text" placeholder="Ex: Dupont"/></div>
         <div class="form-section">
@@ -495,8 +500,33 @@
             <option value="admin">👑 Admin</option>
           </select>
         </div>
-        <div class="form-section"><label class="form-label">Code PIN (4 chiffres)</label><input class="form-input" id="new-pin" type="number" placeholder="Ex: 1234" maxlength="4"/></div>
+        <div class="form-section"><label class="form-label">Code PIN (4 chiffres)</label><input class="form-input" id="new-pin" type="number" placeholder="Ex: 1234"/></div>
         <button class="btn-primary" onclick="saveNewUser()">✓ Créer le compte</button>
+        <button class="btn-secondary" onclick="document.getElementById('add-user-sheet').style.display='none'" style="margin-top:8px;">Annuler</button>
+      </div>
+    </div>
+
+    <!-- CHANGE PIN SHEET -->
+    <div id="change-pin-sheet" style="position:fixed;top:56px;left:0;right:0;bottom:58px;z-index:800;background:white;display:none;overflow-y:auto;">
+      <div style="background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1;">
+        <button onclick="document.getElementById('change-pin-sheet').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;">✕</button>
+        <span style="font-size:16px;font-weight:700;">Changer mon PIN</span>
+      </div>
+      <div style="padding:16px 16px 40px;">
+        <div class="form-section">
+          <label class="form-label">Ancien PIN</label>
+          <input class="form-input" id="old-pin" type="number" placeholder="Votre PIN actuel"/>
+        </div>
+        <div class="form-section">
+          <label class="form-label">Nouveau PIN (4 chiffres)</label>
+          <input class="form-input" id="new-pin-change" type="number" placeholder="Ex: 5678"/>
+        </div>
+        <div class="form-section">
+          <label class="form-label">Confirmer le nouveau PIN</label>
+          <input class="form-input" id="confirm-pin-change" type="number" placeholder="Répétez le PIN"/>
+        </div>
+        <button class="btn-primary" onclick="saveChangePin()">✓ Enregistrer le nouveau PIN</button>
+        <button class="btn-secondary" onclick="document.getElementById('change-pin-sheet').style.display='none'" style="margin-top:8px;">Annuler</button>
       </div>
     </div>
 
@@ -1032,6 +1062,12 @@ function onLoginSuccess() {
   startApp();
 }
 
+function showUserMenu() {
+  const choice = confirm('Que souhaitez-vous faire ?\n\nOK = Changer mon PIN\nAnnuler = Se déconnecter');
+  if (choice) showChangePin();
+  else logout();
+}
+
 function logout() {
   if (!confirm('Se déconnecter ?')) return;
   clearSession();
@@ -1090,6 +1126,35 @@ async function deleteUser(id) {
   if (!confirm('Supprimer cet utilisateur ?')) return;
   await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + id, { method: 'DELETE', headers: HEADERS });
   loadAdminData(); loadUsers(); showToast('✓ Utilisateur supprimé');
+}
+
+function showChangePin() {
+  document.getElementById('old-pin').value = '';
+  document.getElementById('new-pin-change').value = '';
+  document.getElementById('confirm-pin-change').value = '';
+  document.getElementById('change-pin-sheet').style.display = 'block';
+}
+
+async function saveChangePin() {
+  const oldPin = String(document.getElementById('old-pin').value).trim();
+  const newPin = String(document.getElementById('new-pin-change').value).trim();
+  const confirmPin = String(document.getElementById('confirm-pin-change').value).trim();
+  if (newPin.length !== 4) { showToast('Le nouveau PIN doit faire 4 chiffres'); return; }
+  if (newPin !== confirmPin) { showToast('Les deux PIN ne correspondent pas'); return; }
+  // Verify old PIN
+  try {
+    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + currentUser.id + '&pin=eq.' + oldPin, { headers: HEADERS });
+    const data = await r.json();
+    if (!data.length) { showToast('❌ Ancien PIN incorrect'); return; }
+    // Update PIN
+    const u = await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + currentUser.id, {
+      method: 'PATCH', headers: HEADERS, body: JSON.stringify({ pin: newPin })
+    });
+    if (u.ok) {
+      showToast('✓ PIN modifié avec succès !');
+      document.getElementById('change-pin-sheet').style.display = 'none';
+    } else showToast('❌ Erreur lors de la modification');
+  } catch(e) { showToast('❌ Erreur de connexion'); }
 }
 
 function showAddUser() {

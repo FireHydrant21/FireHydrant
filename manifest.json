@@ -1,0 +1,25 @@
+{
+  "name": "FireHydrant — Points d'eau incendie",
+  "short_name": "FireHydrant",
+  "description": "Application de localisation des points d'eau incendie pour les pompiers",
+  "start_url": "/FireHydrant/",
+  "display": "standalone",
+  "background_color": "#B91C1C",
+  "theme_color": "#B91C1C",
+  "orientation": "portrait",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["utilities", "navigation"]
+}

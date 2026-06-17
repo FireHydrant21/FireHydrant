@@ -1446,9 +1446,10 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// Register Service Worker
+// Désactiver et supprimer tous les Service Workers existants
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/FireHydrant/sw.js').catch(err => console.log('SW:', err));
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
 }
 
 async function init() {

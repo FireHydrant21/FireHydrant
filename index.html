@@ -1207,8 +1207,10 @@ function clearSession() {
 
 async function loadUsers() {
   try {
-    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?select=*&actif=eq.true&order=nom', { headers: HEADERS });
+    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?select=*&order=nom', { headers: HEADERS });
+    if (!r.ok) { console.error('Erreur HTTP:', r.status); return; }
     const data = await r.json();
+    console.log('Utilisateurs chargés:', data.length);
     const sel = document.getElementById('login-user-select');
     sel.innerHTML = '<option value="">Sélectionnez votre nom...</option>';
     data.forEach(u => {
@@ -1220,7 +1222,7 @@ async function loadUsers() {
       opt.dataset.nom = u.prenom ? u.prenom + ' ' + u.nom : u.nom;
       sel.appendChild(opt);
     });
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error('Erreur loadUsers:', e); }
 }
 
 let pinValue = '';

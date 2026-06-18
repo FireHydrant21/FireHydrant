@@ -1,3 +1,4 @@
+<!-- FireHydrant v4.0 - 2026-06-17 -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -5,1451 +6,1096 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="FireHydrant"/>
 <meta name="theme-color" content="#B91C1C"/>
 <title>FireHydrant — Points d'eau incendie</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
-<link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<link rel="icon" href="favicon.ico"/>
 <link rel="manifest" href="manifest.json"/>
-<meta name="apple-mobile-web-app-title" content="FireHydrant"/>
-<link rel="manifest" href="manifest.json"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --red: #B91C1C; --red-dark: #991B1B; --red-light: #FEE2E2;
-    --green: #15803D; --green-light: #DCFCE7;
-    --orange: #D97706; --orange-light: #FEF3C7;
-    --blue: #1D4ED8; --blue-light: #EFF6FF;
-    --gray-50: #F9FAFB; --gray-100: #F3F4F6; --gray-200: #E5E7EB;
-    --gray-400: #9CA3AF; --gray-600: #4B5563; --gray-800: #1F2937; --gray-900: #111827;
-    --white: #FFFFFF;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.12); --shadow-md: 0 4px 16px rgba(0,0,0,0.15); --shadow-lg: 0 8px 32px rgba(0,0,0,0.2);
-    --radius: 12px; --radius-sm: 8px;
-  }
-  html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--gray-900); color: var(--gray-900); }
-  #app { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; bottom: 0; }
-  #header { background: var(--red); color: white; padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; box-shadow: var(--shadow-md); z-index: 100; height: 56px; box-sizing: border-box; }
-  #header-icon { font-size: 24px; }
-  #header-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; flex: 1; }
-  #count-badge { background: rgba(255,255,255,0.2); border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-  #sync-indicator { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
-  #sync-indicator.syncing { background: #fbbf24; animation: pulse 1s infinite; }
-  #sync-indicator.error { background: #f87171; }
-  #content { position: fixed; top: 56px; left: 0; right: 0; bottom: 58px; overflow: hidden; }
-  .screen { position: absolute; inset: 0; overflow-y: auto; background: var(--gray-50); display: none; }
-  .screen.active { display: block; }
-  #screen-map { display: none; }
-  #screen-map.active { display: flex; flex-direction: column; }
-  #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 58px; background: var(--white); border-top: 2px solid var(--red); display: flex; z-index: 9999; }
-  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 0; border: none; background: transparent; color: var(--gray-400); font-size: 10px; gap: 2px; cursor: pointer; transition: color 0.2s; -webkit-tap-highlight-color: transparent; }
-  .nav-btn svg { width: 22px; height: 22px; stroke-width: 2; fill: none; stroke: currentColor; }
-  .nav-btn.active { color: var(--red); font-weight: 600; }
-  .nav-btn .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--red); opacity: 0; }
-  .nav-btn.active .dot { opacity: 1; }
-  #map { flex: 1; z-index: 1; }
-  .leaflet-control-zoom { display: none; }
-  #map-search-wrap { position: absolute; top: 10px; left: 10px; right: 60px; z-index: 500; }
-  #map-search-input { width: 100%; padding: 10px 14px; background: var(--white); border: none; border-radius: var(--radius); box-shadow: var(--shadow-md); font-size: 14px; color: var(--gray-900); outline: none; }
-  #map-search-input::placeholder { color: var(--gray-400); }
-  #map-search-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-lg); max-height: 220px; overflow-y: auto; display: none; }
-  #map-search-results.show { display: block; }
-  .search-result-item { padding: 11px 14px; font-size: 14px; color: var(--gray-900); cursor: pointer; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; gap: 8px; }
-  .search-result-item:last-child { border-bottom: none; }
-  .search-result-item:active { background: var(--gray-50); }
-  #map-toolbar { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
-  .map-tool-btn { width: 40px; height: 40px; background: var(--white); border: none; border-radius: var(--radius-sm); box-shadow: var(--shadow-md); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--gray-800); -webkit-tap-highlight-color: transparent; transition: transform 0.1s; }
-  .map-tool-btn:active { transform: scale(0.95); }
-  .map-tool-btn.active-mode { background: var(--red); color: white; }
-  #add-mode-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 500; background: var(--red); color: white; padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow-md); display: none; white-space: nowrap; }
-  #add-mode-hint.show { display: block; }
-  #legend { position: absolute; bottom: 10px; left: 10px; z-index: 500; background: rgba(255,255,255,0.95); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11px; color: var(--gray-600); display: flex; flex-direction: column; gap: 4px; box-shadow: var(--shadow-sm); }
-  .legend-row { display: flex; align-items: center; gap: 6px; }
-  .legend-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); flex-shrink: 0; }
-  #bottom-sheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 600; background: var(--white); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-lg); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); max-height: 75%; overflow-y: auto; }
-  #bottom-sheet.show { transform: translateY(0); }
-  .sheet-handle { width: 36px; height: 4px; background: var(--gray-200); border-radius: 2px; margin: 12px auto 16px; }
-  .sheet-content { padding: 0 16px 20px; }
-  .sheet-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .sheet-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
-  .sheet-title { font-size: 16px; font-weight: 700; color: var(--gray-900); }
-  .sheet-sub { font-size: 13px; color: var(--gray-600); margin-top: 1px; }
-  .sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-  .sheet-field { background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px; }
-  .sheet-field label { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px; }
-  .sheet-field span { font-size: 15px; font-weight: 600; color: var(--gray-900); }
-  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-  .status-ok { background: var(--green-light); color: var(--green); }
-  .status-hs { background: var(--red-light); color: var(--red); }
-  .sheet-notes { background: var(--orange-light); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; color: #92400E; margin-bottom: 14px; }
-  .dist-banner { background: var(--blue-light); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 14px; color: var(--blue); font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-  .btn-primary { width: 100%; padding: 13px; background: var(--red); color: white; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent; transition: background 0.15s; }
-  .btn-primary:active { background: var(--red-dark); }
-  .btn-secondary { width: 100%; padding: 11px; background: var(--gray-100); color: var(--gray-800); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; -webkit-tap-highlight-color: transparent; }
-  .btn-danger { width: 100%; padding: 11px; background: var(--red-light); color: var(--red); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; -webkit-tap-highlight-color: transparent; }
-  #nearest-banner { position: absolute; bottom: 0; left: 0; right: 0; z-index: 600; background: var(--white); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-lg); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); padding: 16px; }
-  #nearest-banner.show { transform: translateY(0); }
-  .nearest-label { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .nearest-name { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
-  .nearest-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-  .chip { background: var(--gray-100); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--gray-800); font-weight: 500; }
-  .chip.green { background: var(--green-light); color: var(--green); }
-  .chip.blue { background: var(--blue-light); color: var(--blue); }
-  #quick-add-sheet { position: absolute; inset: 0; z-index: 700; background: var(--white); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); overflow-y: auto; display: flex; flex-direction: column; }
-  #quick-add-sheet.show { transform: translateY(0); }
-  #qa-header { background: var(--red); color: white; padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  #qa-header h2 { font-size: 16px; font-weight: 700; flex: 1; }
-  #qa-close-btn { background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 30px; height: 30px; color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  #qa-scroll { padding: 16px; flex: 1; }
-  .qa-section-title { font-size: 12px; font-weight: 700; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; margin-top: 16px; }
-  .qa-section-title:first-child { margin-top: 0; }
-  .qa-title { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 4px; }
-  .qa-coord { font-size: 12px; color: var(--gray-400); margin-bottom: 16px; }
-  .qa-type-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-  .qa-type-btn { padding: 14px 8px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--white); font-size: 13px; font-weight: 500; color: var(--gray-600); cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
-  .qa-type-btn.selected { border-color: var(--red); background: var(--red-light); color: var(--red); }
-  .qa-type-btn .qa-icon { font-size: 24px; display: block; margin-bottom: 4px; }
-  .qa-input { width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; margin-bottom: 10px; }
-  .qa-input:focus { border-color: var(--red); }
-  .form-wrap { padding: 16px; }
-  .form-section { margin-bottom: 18px; }
-  .form-label { font-size: 12px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.4px; display: block; margin-bottom: 6px; }
-  .form-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; -webkit-appearance: none; }
-  .form-input:focus { border-color: var(--red); }
-  .form-input::placeholder { color: var(--gray-400); }
-  .form-select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
-  .radio-group { display: flex; gap: 8px; }
-  .radio-option { flex: 1; padding: 11px 8px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--white); font-size: 13px; font-weight: 500; color: var(--gray-600); cursor: pointer; text-align: center; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
-  .radio-option.sel-type { border-color: var(--red); background: var(--red-light); color: var(--red); }
-  .radio-option.sel-ok { border-color: var(--green); background: var(--green-light); color: var(--green); }
-  .radio-option.sel-hs { border-color: var(--red); background: var(--red-light); color: var(--red); }
-  .gps-info { display: flex; align-items: center; gap: 8px; background: var(--blue-light); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 8px; font-size: 12px; color: var(--blue); }
-  .gps-dot { width: 8px; height: 8px; background: var(--blue); border-radius: 50%; animation: pulse 1.5s infinite; flex-shrink: 0; }
-  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
-  #list-search-bar { padding: 12px 14px; background: var(--white); border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; z-index: 10; }
-  #list-search-input { width: 100%; padding: 10px 14px; background: var(--gray-100); border: none; border-radius: var(--radius); font-size: 15px; color: var(--gray-900); outline: none; }
-  #list-search-input::placeholder { color: var(--gray-400); }
-  #filter-bar { display: flex; gap: 8px; padding: 10px 14px; background: var(--white); border-bottom: 1px solid var(--gray-100); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  #filter-bar::-webkit-scrollbar { display: none; }
-  .filter-chip { padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--gray-200); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
-  .filter-chip.active { border-color: var(--red); background: var(--red-light); color: var(--red); }
-  #hydrant-list { padding: 8px 0; }
-  .hydrant-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--white); border-bottom: 1px solid var(--gray-100); cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  .hydrant-item:active { background: var(--gray-50); }
-  .item-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-  .item-icon.ok { background: var(--green-light); }
-  .item-icon.hs { background: var(--red-light); }
-  .item-info { flex: 1; min-width: 0; }
-  .item-name { font-size: 15px; font-weight: 700; color: var(--gray-900); }
-  .item-addr { font-size: 12px; color: var(--gray-400); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .item-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-  .item-status { font-size: 11px; font-weight: 600; }
-  .item-status.ok { color: var(--green); }
-  .item-status.hs { color: var(--red); }
-  .item-dist { font-size: 12px; color: var(--blue); font-weight: 600; }
-  .empty-state { text-align: center; padding: 48px 24px; color: var(--gray-400); }
-  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-  .empty-state p { font-size: 15px; font-weight: 500; color: var(--gray-600); margin-bottom: 6px; }
-  .empty-state span { font-size: 13px; }
-  .page-title { font-size: 22px; font-weight: 800; color: var(--gray-900); padding: 18px 14px 8px; letter-spacing: -0.5px; }
-  #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); z-index: 550; display: none; }
-  #overlay.show { display: block; }
-  #toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--gray-900); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; z-index: 9999; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .hmarker { width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; }
-  .hmarker.ok { background: #16A34A; }
-  .hmarker.hs { background: #DC2626; }
-  .hmarker.nearest { background: #D97706; width: 38px; height: 38px; }
-  .hmarker-me { width: 18px; height: 18px; background: #2563EB; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 5px rgba(37,99,235,0.25); }
-  .anomalie-chip { padding: 8px 10px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
-  .anomalie-chip.selected { border-color: var(--orange); background: var(--orange-light); color: var(--orange); }
-  .form-divider { height: 1px; background: var(--gray-200); margin: 6px 0 18px; }
-  .anomalie-chip { padding: 7px 12px; border-radius: 20px; border: 1.5px solid var(--gray-200); background: var(--white); font-size: 12px; font-weight: 500; color: var(--gray-600); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
-  .anomalie-chip.selected { border-color: var(--orange); background: var(--orange-light); color: var(--orange); font-weight: 700; }
-  .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; color: var(--gray-600); }
-  .spinner { width: 36px; height: 36px; border: 3px solid var(--gray-200); border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  /* LOGIN */
-  #login-screen { position: fixed; inset: 0; background: var(--red); z-index: 9000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-  #login-screen.hidden { display: none; }
-  .login-logo { width: 90px; height: 90px; border-radius: 50%; margin-bottom: 16px; object-fit: cover; border: 3px solid rgba(255,255,255,0.3); }
-  .login-title { font-size: 28px; font-weight: 800; color: white; margin-bottom: 4px; letter-spacing: -0.5px; }
-  .login-sub { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 32px; }
-  .login-card { background: white; border-radius: 20px; padding: 24px; width: 100%; max-width: 340px; box-shadow: var(--shadow-lg); }
-  .login-card-title { font-size: 15px; font-weight: 700; color: var(--gray-900); margin-bottom: 16px; text-align: center; }
-  .user-select { width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius); font-size: 15px; color: var(--gray-900); background: var(--white); outline: none; -webkit-appearance: none; appearance: none; margin-bottom: 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
-  .pin-display { display: flex; justify-content: center; gap: 12px; margin-bottom: 20px; }
-  .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gray-300); background: transparent; transition: all 0.15s; }
-  .pin-dot.filled { background: var(--red); border-color: var(--red); }
-  .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
-  .pin-btn { height: 60px; border: none; border-radius: var(--radius); background: var(--gray-100); font-size: 24px; font-weight: 600; color: var(--gray-900); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 0.1s; display: flex; align-items: center; justify-content: center; }
-  .pin-btn:active { background: var(--gray-200); transform: scale(0.96); }
-  .pin-btn.del { background: var(--red-light); color: var(--red); }
-  .pin-btn.empty { background: transparent; cursor: default; }
-  .login-error { text-align: center; color: var(--red); font-size: 13px; font-weight: 600; min-height: 18px; }
-  /* USER BADGE */
-  #user-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.15); border-radius: 20px; padding: 4px 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  #user-badge span { font-size: 11px; font-weight: 600; color: white; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* ADMIN SCREEN */
-  .admin-section { padding: 16px; }
-  .admin-card { background: white; border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
-  .admin-card h3 { font-size: 14px; font-weight: 700; color: var(--gray-800); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-  .user-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
-  .user-row:last-child { border-bottom: none; }
-  .user-avatar { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: white; flex-shrink: 0; }
-  .role-pompier { background: #2563EB; }
-  .role-gestionnaire { background: #D97706; }
-  .role-admin { background: #DC2626; }
-  .user-info { flex: 1; }
-  .user-name { font-size: 14px; font-weight: 600; color: var(--gray-900); }
-  .user-role { font-size: 12px; color: var(--gray-400); }
-  .anomalie-row { padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
-  .anomalie-row:last-child { border-bottom: none; }
-  .anomalie-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-  .anomalie-name { font-size: 14px; font-weight: 600; color: var(--gray-900); }
-  .statut-chip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
-  .statut-en_cours { background: var(--orange-light); color: var(--orange); }
-  .statut-resolu { background: var(--green-light); color: var(--green); }
-  .anomalie-meta { font-size: 12px; color: var(--gray-400); }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#B91C1C;--red-dark:#991B1B;--red-light:#FEE2E2;
+  --green:#15803D;--green-light:#DCFCE7;
+  --orange:#D97706;--orange-light:#FEF3C7;
+  --blue:#1D4ED8;--blue-light:#EFF6FF;
+  --gray-50:#F9FAFB;--gray-100:#F3F4F6;--gray-200:#E5E7EB;
+  --gray-400:#9CA3AF;--gray-600:#4B5563;--gray-800:#1F2937;--gray-900:#111827;
+  --white:#FFFFFF;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.12);--shadow-md:0 4px 16px rgba(0,0,0,.15);--shadow-lg:0 8px 32px rgba(0,0,0,.2);
+  --radius:12px;--radius-sm:8px
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#111}
+#app{display:flex;flex-direction:column;position:fixed;top:0;left:0;right:0;bottom:0}
+#header{background:var(--red);color:white;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;height:56px;box-sizing:border-box;box-shadow:var(--shadow-md);z-index:100}
+#header-title{font-size:17px;font-weight:700;letter-spacing:-.3px;flex:1}
+#count-badge{background:rgba(255,255,255,.2);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+#sync-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0}
+#user-badge{background:rgba(255,255,255,.15);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;color:white;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#content{position:fixed;top:56px;left:0;right:0;bottom:58px;overflow:hidden}
+.screen{position:absolute;inset:0;overflow-y:auto;background:var(--gray-50);display:none}
+.screen.active{display:block}
+#screen-map{display:none}
+#screen-map.active{display:flex;flex-direction:column}
+#bottom-nav{position:fixed;bottom:0;left:0;right:0;height:58px;background:var(--white);border-top:2px solid var(--red);display:flex;z-index:9999}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0;border:none;background:transparent;color:var(--gray-400);font-size:10px;gap:2px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.nav-btn svg{width:22px;height:22px;stroke-width:2;fill:none;stroke:currentColor}
+.nav-btn.active{color:var(--red);font-weight:600}
+.nav-btn .dot{width:4px;height:4px;border-radius:50%;background:var(--red);opacity:0}
+.nav-btn.active .dot{opacity:1}
+
+/* MAP */
+#map{flex:1;z-index:1}
+.leaflet-control-zoom{display:none}
+#map-search-wrap{position:absolute;top:10px;left:10px;right:56px;z-index:500}
+#map-search-input{width:100%;padding:10px 14px;background:var(--white);border:none;border-radius:var(--radius);box-shadow:var(--shadow-md);font-size:14px;color:var(--gray-900);outline:none}
+#map-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow-lg);max-height:220px;overflow-y:auto;display:none}
+#map-search-results.show{display:block}
+.search-item{padding:11px 14px;font-size:14px;color:var(--gray-900);cursor:pointer;border-bottom:1px solid var(--gray-100)}
+.search-item:last-child{border-bottom:none}
+#map-toolbar{position:absolute;top:10px;right:10px;z-index:500;display:flex;flex-direction:column;gap:8px}
+.map-btn{width:40px;height:40px;background:var(--white);border:none;border-radius:var(--radius-sm);box-shadow:var(--shadow-md);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;-webkit-tap-highlight-color:transparent}
+.map-btn.on{background:var(--red);color:white}
+#add-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:500;background:var(--red);color:white;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;display:none;white-space:nowrap}
+#add-hint.show{display:block}
+#legend{position:absolute;bottom:10px;left:10px;z-index:500;background:rgba(255,255,255,.95);border-radius:var(--radius-sm);padding:8px 10px;font-size:11px;color:var(--gray-600);display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow-sm)}
+.leg-row{display:flex;align-items:center;gap:6px}
+.leg-dot{width:11px;height:11px;border-radius:50%;border:2px solid white;box-shadow:0 0 0 1px rgba(0,0,0,.15);flex-shrink:0}
+#overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:550;display:none}
+#overlay.show{display:block}
+
+/* SHEETS */
+.sheet{position:absolute;bottom:0;left:0;right:0;z-index:600;background:var(--white);border-radius:18px 18px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:80%;overflow-y:auto}
+.sheet.show{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;background:var(--gray-200);border-radius:2px;margin:12px auto 0}
+.sheet-body{padding:14px 16px 24px}
+.sheet-hdr{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.sheet-icon{width:44px;height:44px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.sheet-title{font-size:16px;font-weight:700;color:var(--gray-900)}
+.sheet-sub{font-size:13px;color:var(--gray-600);margin-top:1px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.field{background:var(--gray-50);border-radius:var(--radius-sm);padding:10px 12px}
+.field label{font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px}
+.field span{font-size:15px;font-weight:600;color:var(--gray-900)}
+.badge-ok{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:var(--green-light);color:var(--green)}
+.badge-hs{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:var(--red-light);color:var(--red)}
+.dist-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;color:var(--blue);font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.notes-box{background:var(--orange-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:#92400E;margin-bottom:14px}
+.btn-p{width:100%;padding:13px;background:var(--red);color:white;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent}
+.btn-p:active{background:var(--red-dark)}
+.btn-s{width:100%;padding:11px;background:var(--gray-100);color:var(--gray-800);border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;-webkit-tap-highlight-color:transparent}
+.btn-d{width:100%;padding:11px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;-webkit-tap-highlight-color:transparent}
+
+/* NEAREST BANNER */
+#nearest-banner{position:absolute;bottom:0;left:0;right:0;z-index:600;background:var(--white);border-radius:18px 18px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);padding:16px}
+#nearest-banner.show{transform:translateY(0)}
+.nb-label{font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.nb-name{font-size:18px;font-weight:700;color:var(--gray-900);margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chip{background:var(--gray-100);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--gray-800);font-weight:500}
+.chip.b{background:var(--blue-light);color:var(--blue)}
+.chip.g{background:var(--green-light);color:var(--green)}
+
+/* QUICK ADD - full screen */
+#quick-add{position:fixed;top:56px;left:0;right:0;bottom:58px;z-index:8000;background:var(--white);transform:translateY(120%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow-y:auto}
+#quick-add.show{transform:translateY(0)}
+.qa-hdr{background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1}
+.qa-hdr h2{font-size:16px;font-weight:700;flex:1}
+.qa-close{background:rgba(255,255,255,.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.qa-body{padding:16px 16px 40px}
+.qa-sec{font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px}
+.qa-sec:first-child{margin-top:0}
+.type-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.type-btn{padding:14px 8px;border:1.5px solid var(--gray-200);border-radius:var(--radius);background:var(--white);font-size:13px;font-weight:500;color:var(--gray-600);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
+.type-btn .ti{font-size:24px;display:block;margin-bottom:4px}
+.type-btn.sel{border-color:var(--red);background:var(--red-light);color:var(--red)}
+.inp{width:100%;padding:12px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);font-size:15px;color:var(--gray-900);background:var(--white);outline:none;-webkit-appearance:none;margin-bottom:2px}
+.inp:focus{border-color:var(--red)}
+.inp::placeholder{color:var(--gray-400)}
+.sel-inp{width:100%;padding:12px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);font-size:15px;color:var(--gray-900);background:var(--white);outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.radio-grp{display:flex;gap:8px}
+.radio-opt{flex:1;padding:11px 8px;border:1.5px solid var(--gray-200);border-radius:var(--radius);background:var(--white);font-size:13px;font-weight:500;color:var(--gray-600);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
+.radio-opt.ok{border-color:var(--green);background:var(--green-light);color:var(--green)}
+.radio-opt.hs{border-color:var(--red);background:var(--red-light);color:var(--red)}
+.anom-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.anom-chip{padding:7px 12px;border-radius:20px;border:1.5px solid var(--gray-200);background:var(--white);font-size:12px;font-weight:500;color:var(--gray-600);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.anom-chip.sel{border-color:var(--orange);background:var(--orange-light);color:var(--orange);font-weight:700}
+.photo-prev{display:none;margin-bottom:8px}
+.photo-prev img{width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius)}
+.photo-lbl{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:var(--gray-100);border:2px dashed var(--gray-200);border-radius:var(--radius);font-size:14px;color:var(--gray-600);cursor:pointer}
+.gps-info{display:flex;align-items:center;gap:8px;background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 12px;margin-top:6px;font-size:12px;color:var(--blue)}
+.gps-dot{width:8px;height:8px;background:var(--blue);border-radius:50%;animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+.divider{height:1px;background:var(--gray-200);margin:16px 0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cap-section{display:none}
+
+/* LIST */
+#list-search-bar{padding:12px 14px;background:var(--white);border-bottom:1px solid var(--gray-200);position:sticky;top:0;z-index:10}
+#list-search-input{width:100%;padding:10px 14px;background:var(--gray-100);border:none;border-radius:var(--radius);font-size:15px;color:var(--gray-900);outline:none}
+#filter-bar{display:flex;gap:8px;padding:10px 14px;background:var(--white);border-bottom:1px solid var(--gray-100);overflow-x:auto;-webkit-overflow-scrolling:touch}
+#filter-bar::-webkit-scrollbar{display:none}
+.fchip{padding:5px 12px;border-radius:20px;border:1.5px solid var(--gray-200);background:var(--white);font-size:12px;font-weight:500;color:var(--gray-600);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.fchip.active{border-color:var(--red);background:var(--red-light);color:var(--red)}
+.h-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--white);border-bottom:1px solid var(--gray-100);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.h-item:active{background:var(--gray-50)}
+.h-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.h-icon.ok{background:var(--green-light)}
+.h-icon.hs{background:var(--red-light)}
+.h-info{flex:1;min-width:0}
+.h-name{font-size:15px;font-weight:700;color:var(--gray-900)}
+.h-addr{font-size:12px;color:var(--gray-400);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.h-status{font-size:11px;font-weight:600}
+.h-status.ok{color:var(--green)}
+.h-status.hs{color:var(--red)}
+.h-dist{font-size:12px;color:var(--blue);font-weight:600}
+.empty{text-align:center;padding:48px 24px;color:var(--gray-400)}
+.empty .ei{font-size:48px;margin-bottom:12px}
+.pg-title{font-size:22px;font-weight:800;color:var(--gray-900);padding:18px 14px 8px;letter-spacing:-.5px}
+
+/* ADMIN */
+.admin-wrap{padding:0 16px 80px}
+.admin-card{background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:var(--shadow-sm);margin-top:12px}
+.admin-card h3{font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:12px}
+.u-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100)}
+.u-row:last-child{border-bottom:none}
+.u-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white;flex-shrink:0}
+.u-info{flex:1}
+.u-name{font-size:14px;font-weight:600;color:var(--gray-900)}
+.u-role{font-size:12px;color:var(--gray-400)}
+.an-row{padding:10px 0;border-bottom:1px solid var(--gray-100)}
+.an-row:last-child{border-bottom:none}
+.an-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.an-name{font-size:14px;font-weight:600;color:var(--gray-900)}
+.st-chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+.st-ec{background:var(--orange-light);color:var(--orange)}
+.st-rs{background:var(--green-light);color:var(--green)}
+.an-meta{font-size:12px;color:var(--gray-400)}
+
+/* PROFIL */
+.profil-wrap{padding:16px 16px 80px}
+
+/* SUBSCREEN - full screen overlay */
+.subscreen{position:fixed;top:56px;left:0;right:0;bottom:58px;z-index:8000;background:var(--white);transform:translateY(120%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow-y:auto}
+.subscreen.show{transform:translateY(0)}
+.sub-hdr{background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1}
+.sub-hdr h2{font-size:16px;font-weight:700;flex:1}
+.sub-close{background:rgba(255,255,255,.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.sub-body{padding:16px 16px 40px}
+
+/* BOTTOM NAV */
+#bottom-nav{position:fixed;bottom:0;left:0;right:0;height:58px;background:var(--white);border-top:2px solid var(--red);display:flex;z-index:9999}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0;border:none;background:transparent;color:var(--gray-400);font-size:10px;gap:2px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.nav-btn svg{width:22px;height:22px;stroke-width:2;fill:none;stroke:currentColor}
+.nav-btn.active{color:var(--red);font-weight:600}
+.nav-btn .dot{width:4px;height:4px;border-radius:50%;background:var(--red);opacity:0}
+.nav-btn.active .dot{opacity:1}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:var(--red);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#login-screen.hidden{display:none}
+.login-logo{width:90px;height:90px;border-radius:50%;margin-bottom:16px;object-fit:cover;border:3px solid rgba(255,255,255,.3)}
+.login-title{font-size:28px;font-weight:800;color:white;margin-bottom:4px;letter-spacing:-.5px}
+.login-sub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:32px}
+.login-card{background:white;border-radius:20px;padding:24px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)}
+.login-card-title{font-size:15px;font-weight:700;color:var(--gray-900);margin-bottom:16px;text-align:center}
+.user-sel{width:100%;padding:12px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);font-size:15px;color:var(--gray-900);background:var(--white);outline:none;-webkit-appearance:none;appearance:none;margin-bottom:16px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.pin-dots{display:flex;justify-content:center;gap:12px;margin-bottom:20px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--gray-300);background:transparent;transition:all .15s}
+.pin-dot.filled{background:var(--red);border-color:var(--red)}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.pin-btn{height:60px;border:none;border-radius:var(--radius);background:var(--gray-100);font-size:24px;font-weight:600;color:var(--gray-900);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .1s}
+.pin-btn:active{background:var(--gray-200);transform:scale(.96)}
+.pin-btn.del{background:var(--red-light);color:var(--red)}
+.pin-btn.empty{background:transparent;cursor:default}
+.login-err{text-align:center;color:var(--red);font-size:13px;font-weight:600;min-height:18px}
+
+/* TOAST */
+#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--gray-900);color:white;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* MARKERS */
+.hm{width:32px;height:32px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer}
+.hm.ok{background:#16A34A}
+.hm.hs{background:#DC2626}
+.hm.near{background:#D97706;width:38px;height:38px}
+.hm-me{width:18px;height:18px;background:#2563EB;border-radius:50%;border:3px solid white;box-shadow:0 0 0 5px rgba(37,99,235,.25)}
 </style>
 </head>
 <body>
-<!-- LOGIN SCREEN -->
+
+<!-- LOGIN -->
 <div id="login-screen">
   <img src="apple-touch-icon.png" class="login-logo" alt="FireHydrant" onerror="this.style.display='none'"/>
   <div class="login-title">FireHydrant</div>
   <div class="login-sub">Points d'eau incendie 🇫🇷</div>
   <div class="login-card">
     <div class="login-card-title">Connexion</div>
-    <select class="user-select" id="login-user-select">
-      <option value="">Sélectionnez votre nom...</option>
+    <select class="user-sel" id="login-sel">
+      <option value="">Chargement...</option>
     </select>
-    <div class="pin-display">
+    <div class="pin-dots">
       <div class="pin-dot" id="pd0"></div>
       <div class="pin-dot" id="pd1"></div>
       <div class="pin-dot" id="pd2"></div>
       <div class="pin-dot" id="pd3"></div>
     </div>
     <div class="pin-grid">
-      <button class="pin-btn" onclick="pinPress('1')">1</button>
-      <button class="pin-btn" onclick="pinPress('2')">2</button>
-      <button class="pin-btn" onclick="pinPress('3')">3</button>
-      <button class="pin-btn" onclick="pinPress('4')">4</button>
-      <button class="pin-btn" onclick="pinPress('5')">5</button>
-      <button class="pin-btn" onclick="pinPress('6')">6</button>
-      <button class="pin-btn" onclick="pinPress('7')">7</button>
-      <button class="pin-btn" onclick="pinPress('8')">8</button>
-      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn" onclick="pp('1')">1</button>
+      <button class="pin-btn" onclick="pp('2')">2</button>
+      <button class="pin-btn" onclick="pp('3')">3</button>
+      <button class="pin-btn" onclick="pp('4')">4</button>
+      <button class="pin-btn" onclick="pp('5')">5</button>
+      <button class="pin-btn" onclick="pp('6')">6</button>
+      <button class="pin-btn" onclick="pp('7')">7</button>
+      <button class="pin-btn" onclick="pp('8')">8</button>
+      <button class="pin-btn" onclick="pp('9')">9</button>
       <button class="pin-btn empty"></button>
-      <button class="pin-btn" onclick="pinPress('0')">0</button>
-      <button class="pin-btn del" onclick="pinDel()">⌫</button>
+      <button class="pin-btn" onclick="pp('0')">0</button>
+      <button class="pin-btn del" onclick="pd()">⌫</button>
     </div>
-    <div class="login-error" id="login-error"></div>
+    <div class="login-err" id="login-err"></div>
   </div>
 </div>
 
 <div id="app">
+  <!-- HEADER -->
   <div id="header">
-    <img src="apple-touch-icon.png" style="width:38px;height:38px;border-radius:50%;flex-shrink:0;object-fit:cover;border:2px solid rgba(255,255,255,0.4);" alt="FireHydrant" onerror="this.style.display='none';document.getElementById('header-icon-fallback').style.display='block'"/>
-    <span id="header-icon-fallback" style="display:none;font-size:24px;">🔥</span>
+    <img src="apple-touch-icon.png" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;object-fit:cover;border:2px solid rgba(255,255,255,.3)" alt="" onerror="this.style.display='none'"/>
     <div id="header-title">FireHydrant</div>
-    <div id="sync-indicator" title="Connecté à Supabase"></div>
-    <div id="user-badge" onclick="showUserMenu()">
-      <span id="user-badge-name">—</span>
-      <span>⏏</span>
-    </div>
+    <div id="sync-dot"></div>
+    <div id="user-badge">—</div>
     <span id="count-badge">0 point</span>
   </div>
 
   <div id="content">
-    <!-- MAP -->
+    <!-- MAP SCREEN -->
     <div class="screen active" id="screen-map">
       <div id="map"></div>
       <div id="map-search-wrap">
-        <input id="map-search-input" type="search" placeholder="🔍  Rechercher une ville, adresse..." autocomplete="off" oninput="searchCity(this.value)" onfocus="showSearchResults()"/>
+        <input id="map-search-input" type="search" placeholder="🔍  Rechercher une ville..." autocomplete="off" oninput="searchCity(this.value)"/>
         <div id="map-search-results"></div>
       </div>
       <div id="map-toolbar">
-        <button class="map-tool-btn" onclick="locateMe()" title="Ma position">
-          <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><circle cx="12" cy="12" r="9"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
-        </button>
-        <button class="map-tool-btn" onclick="findNearest()" title="Le plus proche">🚒</button>
-        <button class="map-tool-btn" id="btn-add-mode" onclick="toggleAddMode()" title="Ajouter en cliquant">➕</button>
-        <button class="map-tool-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre ma position">
-          <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 2L19 21 12 17 5 21z"/></svg>
-        </button>
+        <button class="map-btn" onclick="locateMe()" title="Ma position">📍</button>
+        <button class="map-btn" onclick="findNearest()" title="Plus proche">🚒</button>
+        <button class="map-btn" id="btn-add" onclick="toggleAdd()" title="Ajouter">➕</button>
+        <button class="map-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre">▲</button>
       </div>
-      <div id="add-mode-hint">📍 Appuyez sur la carte pour placer un point d'eau</div>
+      <div id="add-hint">📍 Tapez sur la carte pour placer un point d'eau</div>
       <div id="legend">
-        <div class="legend-row"><div class="legend-dot" style="background:#16A34A;"></div><span>Opérationnel</span></div>
-        <div class="legend-row"><div class="legend-dot" style="background:#DC2626;"></div><span>Hors service</span></div>
-        <div class="legend-row"><div class="legend-dot" style="background:#D97706;"></div><span>Le plus proche</span></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#16A34A"></div><span>Opérationnel</span></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#DC2626"></div><span>Hors service</span></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#D97706"></div><span>Le plus proche</span></div>
       </div>
       <div id="overlay" onclick="closeAll()"></div>
-      <div id="bottom-sheet">
+
+      <!-- Detail sheet -->
+      <div class="sheet" id="detail-sheet">
         <div class="sheet-handle"></div>
-        <div class="sheet-content" id="sheet-content"></div>
+        <div class="sheet-body" id="detail-body"></div>
       </div>
+
+      <!-- Nearest banner -->
       <div id="nearest-banner">
-        <div class="nearest-label">⚡ Point d'eau le plus proche</div>
-        <div class="nearest-name" id="nearest-name">—</div>
-        <div class="nearest-chips" id="nearest-chips"></div>
-        <button class="btn-primary" id="nearest-nav-btn">🧭 Naviguer vers ce point d'eau</button>
-        <button class="btn-secondary" onclick="closeNearest()">Fermer</button>
-      </div>
-      <div id="quick-add-sheet">
-        <div id="qa-header">
-          <span style="font-size:20px;">💧</span>
-          <h2>Nouveau point d'eau</h2>
-          <button id="qa-close-btn" onclick="cancelQuickAdd()">✕</button>
-        </div>
-        <div id="qa-scroll">
-          <div class="qa-coord" id="qa-coord" style="font-size:12px;color:var(--gray-400);margin-bottom:14px;"></div>
-
-          <div class="qa-section-title">Type de point d'eau</div>
-          <div class="qa-type-grid" style="margin-bottom:0;">
-            <button class="qa-type-btn" id="qa-poteau" onclick="quickSelType('poteau',this)"><span class="qa-icon">🔴</span>Poteau</button>
-            <button class="qa-type-btn" id="qa-borne" onclick="quickSelType('borne',this)"><span class="qa-icon">💧</span>Borne</button>
-            <button class="qa-type-btn" id="qa-reservoir" onclick="quickSelType('reservoir',this)"><span class="qa-icon">🏊</span>Réservoir</button>
-          </div>
-
-          <div class="qa-section-title">Identifiant</div>
-          <input class="qa-input" id="qa-id" type="text" placeholder="Ex: PI-001"/>
-
-          <div class="qa-section-title">Adresse / Lieu</div>
-          <input class="qa-input" id="qa-addr" type="text" placeholder="Adresse détectée automatiquement"/>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div>
-              <div class="qa-section-title">Diamètre</div>
-              <select class="form-select" id="qa-diam" style="padding:11px 10px;">
-                <option>100 mm</option><option>150 mm</option><option>80 mm</option><option>200 mm</option><option>Inconnu</option>
-              </select>
-            </div>
-            <div>
-              <div class="qa-section-title">Pression (bar)</div>
-              <input class="qa-input" id="qa-pres" type="number" placeholder="Ex: 3.5" step="0.1" min="0" max="20" style="margin-bottom:0;"/>
-            </div>
-          </div>
-
-          <div class="qa-section-title">État</div>
-          <div style="display:flex;gap:8px;margin-bottom:4px;">
-            <div class="radio-option sel-ok" id="qa-etat-ok" onclick="quickSelEtat('ok')">✓ Opérationnel</div>
-            <div class="radio-option" id="qa-etat-hs" onclick="quickSelEtat('hs')">✕ Hors service</div>
-          </div>
-
-          <div id="qa-capacite-section" style="display:none;">
-            <div class="qa-section-title">Capacité du réservoir</div>
-            <div style="display:flex;gap:8px;">
-              <input class="qa-input" id="qa-capacite" type="number" placeholder="Ex: 120" min="0" style="flex:2;margin-bottom:0"/>
-              <select class="form-select" id="qa-capacite-unit" style="flex:1;padding:11px 10px;">
-                <option value="m3">m³</option>
-                <option value="L">Litres</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="qa-section-title">Anomalies constatées</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;" id="qa-anomalie-chips">
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Fuite')">💧 Fuite</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué/caché')">🚧 Accès bloqué/caché</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Bouchon manquant')">🔩 Bouchon manquant</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Signalisation absente')">⚠️ Signalisation absente</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Vandalisme')">🔨 Vandalisme</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Pression insuffisante')">📉 Pression insuffisante</div>
-          </div>
-
-          <div class="qa-section-title">Notes complémentaires</div>
-          <textarea class="qa-input" id="qa-notes" rows="3" placeholder="Informations supplémentaires..." style="resize:none;"></textarea>
-
-          <div class="qa-section-title">Photo 📷</div>
-          <div id="qa-photo-preview" style="display:none;margin-bottom:8px;">
-            <img id="qa-photo-img" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);"/>
-            <button onclick="clearPhoto()" style="width:100%;margin-top:6px;padding:8px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer;">✕ Supprimer la photo</button>
-          </div>
-          <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:var(--gray-100);border:2px dashed var(--gray-200);border-radius:var(--radius);font-size:14px;color:var(--gray-600);cursor:pointer;">
-            📷 Prendre ou choisir une photo
-            <input type="file" id="qa-photo" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)"/>
-          </label>
-
-          <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
-          <button class="btn-primary" onclick="confirmQuickAdd()">✓ Enregistrer le point d'eau</button>
-          <button class="btn-secondary" onclick="cancelQuickAdd()" style="margin-top:8px;margin-bottom:16px;">Annuler</button>
-        </div>
+        <div class="nb-label">⚡ Point d'eau le plus proche</div>
+        <div class="nb-name" id="nb-name">—</div>
+        <div class="chips" id="nb-chips"></div>
+        <button class="btn-p" id="nb-nav">🧭 Naviguer</button>
+        <button class="btn-s" onclick="closeNearest()">Fermer</button>
       </div>
     </div>
 
-    <!-- LIST -->
+    <!-- LIST SCREEN -->
     <div class="screen" id="screen-list">
-      <div class="page-title">Points d'eau</div>
+      <div class="pg-title">Points d'eau</div>
       <div id="list-search-bar">
-        <input id="list-search-input" type="search" placeholder="🔍  Rechercher par ID ou adresse..." oninput="renderList()"/>
+        <input id="list-search-input" type="search" placeholder="🔍  Rechercher..." oninput="renderList()"/>
       </div>
       <div id="filter-bar">
-        <div class="filter-chip active" onclick="setFilter('all',this)">Tous</div>
-        <div class="filter-chip" onclick="setFilter('ok',this)">✓ Opérationnel</div>
-        <div class="filter-chip" onclick="setFilter('hs',this)">✕ Hors service</div>
-        <div class="filter-chip" onclick="setFilter('poteau',this)">Poteau</div>
-        <div class="filter-chip" onclick="setFilter('borne',this)">Borne</div>
-        <div class="filter-chip" onclick="setFilter('reservoir',this)">Réservoir</div>
+        <div class="fchip active" onclick="setFilter('all',this)">Tous</div>
+        <div class="fchip" onclick="setFilter('ok',this)">✓ Opérationnel</div>
+        <div class="fchip" onclick="setFilter('hs',this)">✕ Hors service</div>
+        <div class="fchip" onclick="setFilter('poteau',this)">Poteau</div>
+        <div class="fchip" onclick="setFilter('borne',this)">Borne</div>
+        <div class="fchip" onclick="setFilter('reservoir',this)">Réservoir</div>
       </div>
-      <div id="hydrant-list"></div>
+      <div id="h-list"></div>
     </div>
-
-    <!-- ADD/EDIT FORM -->
-    <div class="screen" id="screen-add">
-      <div class="page-title" id="form-title">Ajouter un point d'eau</div>
-      <div class="form-wrap">
-        <input type="hidden" id="edit-id"/>
-        <input type="hidden" id="f-lat"/>
-        <input type="hidden" id="f-lng"/>
-        <input type="hidden" id="f-photo-existing"/>
-        <div class="form-section">
-          <label class="form-label">Type</label>
-          <div class="radio-group">
-            <div class="radio-option sel-type" id="t-poteau" onclick="selType('poteau')">🔴 Poteau</div>
-            <div class="radio-option" id="t-borne" onclick="selType('borne')">💧 Borne</div>
-            <div class="radio-option" id="t-reservoir" onclick="selType('reservoir')">🏊 Réservoir</div>
-          </div>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Identifiant</label>
-          <input class="form-input" id="f-id" type="text" placeholder="Ex: PI-042"/>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Adresse / Lieu</label>
-          <input class="form-input" id="f-addr" type="text" placeholder="Ex: 12 Rue de la Mairie"/>
-          <div class="gps-info">
-            <div class="gps-dot"></div>
-            <span id="gps-text">Récupération de la position GPS...</span>
-          </div>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Diamètre</label>
-          <select class="form-select" id="f-diam">
-            <option>100 mm</option><option>150 mm</option><option>80 mm</option><option>200 mm</option><option>Inconnu</option>
-          </select>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Pression estimée (bar)</label>
-          <input class="form-input" id="f-pres" type="number" placeholder="Ex: 3.5" step="0.1" min="0" max="20"/>
-        </div>
-        <div class="form-section">
-          <label class="form-label">État</label>
-          <div class="radio-group">
-            <div class="radio-option sel-ok" id="e-ok" onclick="selEtat('ok')">✓ Opérationnel</div>
-            <div class="radio-option" id="e-hs" onclick="selEtat('hs')">✕ Hors service</div>
-          </div>
-        </div>
-        <div class="form-section" id="section-capacite" style="display:none">
-          <label class="form-label">Capacité du réservoir</label>
-          <div style="display:flex;gap:8px">
-            <input class="form-input" id="f-capacite" type="number" placeholder="Ex: 120" min="0" style="flex:2"/>
-            <select class="form-select" id="f-capacite-unit" style="flex:1">
-              <option value="m3">m³</option>
-              <option value="L">Litres</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Anomalies constatées</label>
-          <div class="radio-group" style="flex-wrap:wrap;gap:6px" id="anomalie-chips">
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Fuite')">💧 Fuite</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Accès bloqué/caché')">🚧 Accès bloqué/caché</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Bouchon manquant')">🔩 Bouchon manquant</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Signalisation absente')">⚠️ Signalisation absente</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Vandalisme')">🔨 Vandalisme</div>
-            <div class="anomalie-chip" onclick="toggleAnomalie(this,'Pression insuffisante')">📉 Pression insuffisante</div>
-          </div>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Notes complémentaires</label>
-          <textarea class="form-input" id="f-notes" rows="2" placeholder="Informations supplémentaires..."></textarea>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Photo 📷</label>
-          <div id="f-photo-preview" style="display:none;margin-bottom:8px;">
-            <img id="f-photo-img" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);"/>
-            <button onclick="clearFormPhoto()" style="width:100%;margin-top:6px;padding:8px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer;">✕ Supprimer la photo</button>
-          </div>
-          <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:var(--gray-100);border:2px dashed var(--gray-200);border-radius:var(--radius);font-size:14px;color:var(--gray-600);cursor:pointer;">
-            📷 Prendre ou choisir une photo
-            <input type="file" id="f-photo" accept="image/*" capture="environment" style="display:none;" onchange="previewFormPhoto(this)"/>
-          </label>
-        </div>
-        <div class="form-divider"></div>
-        <button class="btn-primary" onclick="submitForm()">✓ <span id="submit-label">Enregistrer le point d'eau</span></button>
-        <button class="btn-secondary" onclick="resetForm(); switchTab('map')">Annuler</button>
-      </div>
-    </div>
-  </div>
 
     <!-- ADMIN SCREEN -->
     <div class="screen" id="screen-admin">
-      <div class="page-title">Gestion 👨‍💼</div>
-      <div class="admin-section">
+      <div class="pg-title">Gestion 👨‍💼</div>
+      <div class="admin-wrap">
         <div class="admin-card">
           <h3>👥 Utilisateurs</h3>
-          <div id="admin-users-list"><div style="color:var(--gray-400);font-size:13px;">Chargement...</div></div>
-          <button class="btn-primary" style="margin-top:12px;" onclick="showAddUser()">➕ Ajouter un utilisateur</button>
+          <div id="admin-users">Chargement...</div>
+          <button class="btn-p" style="margin-top:12px" onclick="showSub('sub-add-user')">➕ Ajouter un utilisateur</button>
         </div>
         <div class="admin-card">
           <h3>⚠️ Anomalies signalées</h3>
-          <div id="admin-anomalies-list"><div style="color:var(--gray-400);font-size:13px;">Chargement...</div></div>
+          <div id="admin-anomalies">Chargement...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFIL SCREEN -->
+    <div class="screen" id="screen-profil">
+      <div class="pg-title">Mon compte</div>
+      <div class="profil-wrap">
+        <div class="admin-card">
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 0">
+            <div id="pav" style="width:56px;height:56px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;flex-shrink:0">?</div>
+            <div>
+              <div id="pnom" style="font-size:18px;font-weight:700;color:var(--gray-900)">—</div>
+              <div id="prole" style="font-size:13px;color:var(--gray-400);margin-top:2px">—</div>
+              <div style="font-size:12px;color:var(--gray-400)">Caserne de Nolay • SDIS 21</div>
+            </div>
+          </div>
         </div>
         <div class="admin-card">
-          <h3>🔑 Mon code PIN</h3>
-          <p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Modifier votre code PIN de connexion</p>
-          <button class="btn-primary" onclick="showChangePin()">🔑 Changer mon PIN</button>
+          <h3>🔑 Code PIN</h3>
+          <p style="font-size:13px;color:var(--gray-600);margin-bottom:12px">Modifiez votre code PIN de connexion</p>
+          <button class="btn-p" onclick="showSub('sub-change-pin')">🔑 Changer mon PIN</button>
         </div>
-        <button class="btn-danger" style="margin:0 0 80px;" onclick="logout()">⏏ Se déconnecter</button>
+        <button class="btn-d" style="margin-top:8px" onclick="logout()">⏏ Se déconnecter</button>
       </div>
     </div>
-
-    <!-- ADD USER SHEET -->
-    <div id="add-user-sheet" style="position:fixed;top:56px;left:0;right:0;bottom:58px;z-index:800;background:white;display:none;overflow-y:auto;">
-      <div style="background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1;">
-        <button onclick="document.getElementById('add-user-sheet').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;">✕</button>
-        <span style="font-size:16px;font-weight:700;">Nouvel utilisateur</span>
-      </div>
-      <div style="padding:16px 16px 40px;">
-        <div class="form-section"><label class="form-label">Prénom</label><input class="form-input" id="new-prenom" type="text" placeholder="Ex: Jean"/></div>
-        <div class="form-section"><label class="form-label">Nom</label><input class="form-input" id="new-nom" type="text" placeholder="Ex: Dupont"/></div>
-        <div class="form-section">
-          <label class="form-label">Rôle</label>
-          <select class="form-select" id="new-role">
-            <option value="pompier">👨‍🚒 Pompier</option>
-            <option value="gestionnaire">👨‍💼 Gestionnaire</option>
-            <option value="admin">👑 Admin</option>
-          </select>
-        </div>
-        <div class="form-section"><label class="form-label">Code PIN (4 chiffres)</label><input class="form-input" id="new-pin" type="number" placeholder="Ex: 1234"/></div>
-        <button class="btn-primary" onclick="saveNewUser()">✓ Créer le compte</button>
-        <button class="btn-secondary" onclick="document.getElementById('add-user-sheet').style.display='none'" style="margin-top:8px;">Annuler</button>
-      </div>
-    </div>
-
-    <!-- CHANGE PIN SHEET -->
-    <div id="change-pin-sheet" style="position:fixed;top:56px;left:0;right:0;bottom:58px;z-index:800;background:white;display:none;overflow-y:auto;">
-      <div style="background:var(--red);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1;">
-        <button onclick="document.getElementById('change-pin-sheet').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:18px;cursor:pointer;">✕</button>
-        <span style="font-size:16px;font-weight:700;">Changer mon PIN</span>
-      </div>
-      <div style="padding:16px 16px 40px;">
-        <div class="form-section">
-          <label class="form-label">Ancien PIN</label>
-          <input class="form-input" id="old-pin" type="number" placeholder="Votre PIN actuel"/>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Nouveau PIN (4 chiffres)</label>
-          <input class="form-input" id="new-pin-change" type="number" placeholder="Ex: 5678"/>
-        </div>
-        <div class="form-section">
-          <label class="form-label">Confirmer le nouveau PIN</label>
-          <input class="form-input" id="confirm-pin-change" type="number" placeholder="Répétez le PIN"/>
-        </div>
-        <button class="btn-primary" onclick="saveChangePin()">✓ Enregistrer le nouveau PIN</button>
-        <button class="btn-secondary" onclick="document.getElementById('change-pin-sheet').style.display='none'" style="margin-top:8px;">Annuler</button>
-      </div>
-    </div>
-
   </div>
 
+  <!-- BOTTOM NAV -->
   <div id="bottom-nav">
-    <button class="nav-btn active" id="nav-map" onclick="switchTab('map')">
+    <button class="nav-btn active" id="nav-map" onclick="goTab('map')">
       <svg viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
       Carte<div class="dot"></div>
     </button>
-    <button class="nav-btn" id="nav-nearest" onclick="switchTab('map'); setTimeout(findNearest,300)">
+    <button class="nav-btn" id="nav-nearest" onclick="goTab('map');setTimeout(findNearest,300)">
       <svg viewBox="0 0 24 24"><path d="M12 2L19 21 12 17 5 21z" fill="currentColor" stroke="none"/></svg>
       Itinéraire<div class="dot"></div>
     </button>
-    <button class="nav-btn" id="nav-add" onclick="switchTab('add')">
+    <button class="nav-btn" id="nav-add-tab" onclick="toggleAdd();goTab('map')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
       Ajouter<div class="dot"></div>
     </button>
-    <button class="nav-btn" id="nav-list" onclick="switchTab('list')">
+    <button class="nav-btn" id="nav-list" onclick="goTab('list')">
       <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
       Liste<div class="dot"></div>
     </button>
-    <button class="nav-btn" id="nav-admin" onclick="switchTab('admin')">
+    <button class="nav-btn" id="nav-admin" onclick="goTab('admin')" style="display:none">
       <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       Gestion<div class="dot"></div>
     </button>
+    <button class="nav-btn" id="nav-profil" onclick="goTab('profil')">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Mon compte<div class="dot"></div>
+    </button>
   </div>
 </div>
+
+<!-- QUICK ADD (full screen) -->
+<div id="quick-add">
+  <div class="qa-hdr">
+    <button class="qa-close" onclick="cancelAdd()">✕</button>
+    <h2>Nouveau point d'eau</h2>
+  </div>
+  <div class="qa-body">
+    <input type="hidden" id="qa-editing-id" value=""/>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px" id="qa-coord"></div>
+    <div class="qa-sec">Type de point d'eau</div>
+    <div class="type-grid">
+      <button class="type-btn" id="qt-poteau" onclick="selType('poteau',this)"><span class="ti">🔴</span>Poteau</button>
+      <button class="type-btn" id="qt-borne" onclick="selType('borne',this)"><span class="ti">💧</span>Borne</button>
+      <button class="type-btn" id="qt-reservoir" onclick="selType('reservoir',this)"><span class="ti">🏊</span>Réservoir</button>
+    </div>
+    <div class="qa-sec">Identifiant</div>
+    <input class="inp" id="qa-id" type="text" placeholder="Ex: PI-042"/>
+    <div class="qa-sec">Adresse / Lieu</div>
+    <input class="inp" id="qa-addr" type="text" placeholder="Adresse détectée automatiquement"/>
+    <div class="qa-sec">Informations</div>
+    <div class="row2">
+      <div>
+        <div style="font-size:11px;color:var(--gray-600);margin-bottom:4px;font-weight:600">DIAMÈTRE</div>
+        <select class="sel-inp" id="qa-diam"><option>100 mm</option><option>150 mm</option><option>80 mm</option><option>200 mm</option><option>Inconnu</option></select>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--gray-600);margin-bottom:4px;font-weight:600">PRESSION (bar)</div>
+        <input class="inp" id="qa-pres" type="number" placeholder="Ex: 3.5" step="0.1" min="0" max="20"/>
+      </div>
+    </div>
+    <div class="qa-sec">État</div>
+    <div class="radio-grp">
+      <div class="radio-opt ok" id="qa-etat-ok" onclick="selEtat('ok')">✓ Opérationnel</div>
+      <div class="radio-opt" id="qa-etat-hs" onclick="selEtat('hs')">✕ Hors service</div>
+    </div>
+    <div class="cap-section" id="qa-cap-wrap">
+      <div class="qa-sec">Capacité du réservoir</div>
+      <div class="row2">
+        <input class="inp" id="qa-cap-val" type="number" placeholder="Ex: 120" min="0"/>
+        <select class="sel-inp" id="qa-cap-unit"><option value="m3">m³</option><option value="L">Litres</option></select>
+      </div>
+    </div>
+    <div class="qa-sec">Anomalies constatées</div>
+    <div class="anom-wrap" id="qa-anoms">
+      <div class="anom-chip" onclick="togAnom(this)" data-v="Fuite">💧 Fuite</div>
+      <div class="anom-chip" onclick="togAnom(this)" data-v="Accès bloqué/caché">🚧 Accès bloqué/caché</div>
+      <div class="anom-chip" onclick="togAnom(this)" data-v="Bouchon manquant">🔩 Bouchon manquant</div>
+      <div class="anom-chip" onclick="togAnom(this)" data-v="Signalisation absente">⚠️ Signalisation absente</div>
+      <div class="anom-chip" onclick="togAnom(this)" data-v="Vandalisme">🔨 Vandalisme</div>
+      <div class="anom-chip" onclick="togAnom(this)" data-v="Pression insuffisante">📉 Pression insuffisante</div>
+    </div>
+    <div class="qa-sec">Notes complémentaires</div>
+    <textarea class="inp" id="qa-notes" rows="3" placeholder="Informations supplémentaires..." style="resize:none"></textarea>
+    <div class="qa-sec">Photo 📷</div>
+    <div class="photo-prev" id="qa-photo-prev">
+      <img id="qa-photo-img"/>
+      <button onclick="clearPhoto()" style="width:100%;margin-top:6px;padding:8px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer">✕ Supprimer</button>
+    </div>
+    <label class="photo-lbl">📷 Prendre ou choisir une photo<input type="file" id="qa-photo" accept="image/*" style="display:none" onchange="prevPhoto(this)"/></label>
+    <div class="divider"></div>
+    <button class="btn-p" onclick="confirmAdd()">✓ Enregistrer le point d'eau</button>
+    <button class="btn-s" onclick="cancelAdd()" style="margin-bottom:16px">Annuler</button>
+  </div>
+</div>
+
+<!-- SUB: Add User -->
+<div class="subscreen" id="sub-add-user">
+  <div class="sub-hdr">
+    <button class="sub-close" onclick="hideSub('sub-add-user')">✕</button>
+    <h2>Nouvel utilisateur</h2>
+  </div>
+  <div class="sub-body">
+    <div class="qa-sec">Prénom</div>
+    <input class="inp" id="nu-prenom" type="text" placeholder="Ex: Jean"/>
+    <div class="qa-sec">Nom</div>
+    <input class="inp" id="nu-nom" type="text" placeholder="Ex: Dupont"/>
+    <div class="qa-sec">Rôle</div>
+    <select class="sel-inp" id="nu-role">
+      <option value="pompier">👨‍🚒 Pompier</option>
+      <option value="gestionnaire">👨‍💼 Gestionnaire</option>
+      <option value="admin">👑 Admin</option>
+    </select>
+    <div class="qa-sec">Code PIN (4 chiffres)</div>
+    <input class="inp" id="nu-pin" type="number" placeholder="Ex: 1234"/>
+    <div class="divider"></div>
+    <button class="btn-p" onclick="createUser()">✓ Créer le compte</button>
+    <button class="btn-s" onclick="hideSub('sub-add-user')">Annuler</button>
+  </div>
+</div>
+
+<!-- SUB: Change PIN -->
+<div class="subscreen" id="sub-change-pin">
+  <div class="sub-hdr">
+    <button class="sub-close" onclick="hideSub('sub-change-pin')">✕</button>
+    <h2>Changer mon PIN</h2>
+  </div>
+  <div class="sub-body">
+    <div class="qa-sec">Ancien PIN</div>
+    <input class="inp" id="cp-old" type="number" placeholder="Votre PIN actuel"/>
+    <div class="qa-sec">Nouveau PIN (4 chiffres)</div>
+    <input class="inp" id="cp-new" type="number" placeholder="Ex: 5678"/>
+    <div class="qa-sec">Confirmer le nouveau PIN</div>
+    <input class="inp" id="cp-confirm" type="number" placeholder="Répétez le PIN"/>
+    <div class="divider"></div>
+    <button class="btn-p" onclick="changePin()">✓ Enregistrer</button>
+    <button class="btn-s" onclick="hideSub('sub-change-pin')">Annuler</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
-// ── SUPABASE CONFIG ───────────────────────────────────────────────────────────
+// ── CONFIG ────────────────────────────────────────────────────────────────────
 const SUPA_URL = 'https://unhuhvpifraxbeiznmge.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVuaHVodnBpZnJheGJlaXpubWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExOTc0MjcsImV4cCI6MjA5Njc3MzQyN30.r0bpz6oWIBaEKXfumFWsZvcNWaIiJpTOX6V4kq71zdM';
-const HEADERS = { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY };
-
-async function dbGet() {
-  setSyncing(true);
-  try {
-    const r = await fetch(SUPA_URL + '/rest/v1/poteaux?select=*&order=id', { headers: HEADERS });
-    if (!r.ok) throw new Error(await r.text());
-    const data = await r.json();
-    setSyncing(false);
-    return data.map(d => ({
-      id: d.identifiant, type: d.type, addr: d.adresse,
-      diam: d.diametre, pres: d.pression, ok: d.etat,
-      notes: d.notes, lat: d.latitude, lng: d.longitude,
-      added: d.date_ajout, capacite: d.capacite, photo_url: d.photo_url, _dbid: d.id
-    }));
-  } catch(e) { setError(); console.error(e); return null; }
-}
-
-async function dbInsert(h) {
-  setSyncing(true);
-  try {
-    const r = await fetch(SUPA_URL + '/rest/v1/poteaux', {
-      method: 'POST',
-      headers: { ...HEADERS, 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        identifiant: h.id, type: h.type, adresse: h.addr,
-        diametre: h.diam, pression: h.pres || '', etat: h.ok,
-        notes: h.notes || '', latitude: h.lat, longitude: h.lng,
-        date_ajout: h.added, capacite: h.capacite || '', photo_url: h.photo_url || ''
-      })
-    });
-    if (!r.ok) throw new Error(await r.text());
-    setSyncing(false); return true;
-  } catch(e) { setError(); console.error(e); return false; }
-}
-
-async function dbUpdate(h) {
-  setSyncing(true);
-  try {
-    const r = await fetch(SUPA_URL + '/rest/v1/poteaux?identifiant=eq.' + encodeURIComponent(h.id), {
-      method: 'PATCH',
-      headers: { ...HEADERS, 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        type: h.type, adresse: h.addr, diametre: h.diam,
-        pression: h.pres || '', etat: h.ok, notes: h.notes || '',
-        latitude: h.lat, longitude: h.lng, capacite: h.capacite || '',
-        photo_url: h.photo_url || ''
-      })
-    });
-    if (!r.ok) throw new Error(await r.text());
-    setSyncing(false); return true;
-  } catch(e) { setError(); console.error(e); return false; }
-}
-
-async function dbDelete(id) {
-  setSyncing(true);
-  try {
-    const r = await fetch(SUPA_URL + '/rest/v1/poteaux?identifiant=eq.' + encodeURIComponent(id), {
-      method: 'DELETE', headers: HEADERS
-    });
-    if (!r.ok) throw new Error(await r.text());
-    setSyncing(false); return true;
-  } catch(e) { setError(); console.error(e); return false; }
-}
-
-function setSyncing(v) { document.getElementById('sync-indicator').className = v ? 'syncing' : ''; }
-function setError() { document.getElementById('sync-indicator').className = 'error'; setSyncing(false); }
+const H = {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Accept':'application/json'};
+const SESSION_KEY = 'fh_v2';
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let hydrants = [];
-let myLat = null, myLng = null;
-let activeFilter = 'all';
-let selectedType = 'poteau', selectedEtat = 'ok';
-let nearestId = null;
-let addMode = false;
-let quickLat = null, quickLng = null, quickType = null;
-let meMarker = null;
+let hydrants = [], myLat = null, myLng = null, nearestId = null;
+let addMode = false, followMode = false, followWatch = null;
+let quickLat = null, quickLng = null, quickType = null, quickEtat = 'ok';
+let activeFilter = 'all', currentUser = null;
+let mapObj, meMarker;
 const markers = {};
 let searchTimeout = null;
 
-function updateBadge() { const n = hydrants.length; document.getElementById('count-badge').textContent = n + (n > 1 ? ' points' : ' point'); }
-function genId(type) {
-  const prefix = type === 'poteau' ? 'PI' : type === 'borne' ? 'BI' : 'RI';
-  const nums = hydrants.filter(h => h.type === type).map(h => parseInt((h.id.split('-')[1])) || 0);
-  return prefix + '-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+// ── DB ────────────────────────────────────────────────────────────────────────
+async function dbFetch(path, opts={}) {
+  const r = await fetch(SUPA_URL+'/rest/v1/'+path, {...opts, headers:{...H,...(opts.headers||{})}});
+  if (!r.ok) throw new Error(await r.text());
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
 }
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+async function getHydrants() { return dbFetch('poteaux?select=*&order=identifiant'); }
+async function insertHydrant(h) { return dbFetch('poteaux',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(h)}); }
+async function updateHydrant(id,h) { return dbFetch('poteaux?identifiant=eq.'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(h)}); }
+async function deleteHydrant(id) { return dbFetch('poteaux?identifiant=eq.'+encodeURIComponent(id),{method:'DELETE'}); }
+async function getUsers() { return dbFetch('utilisateurs?select=*&order=prenom'); }
+
+function toH(d) {
+  return {id:d.identifiant,type:d.type,addr:d.adresse,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,capacite:d.capacite,photo_url:d.photo_url};
 }
-function fmtDist(d) { return d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(1) + ' km'; }
+function toDb(h) {
+  return {identifiant:h.id,type:h.type,adresse:h.addr,diametre:h.diam,pression:h.pres||'',etat:h.ok,notes:h.notes||'',latitude:h.lat,longitude:h.lng,date_ajout:h.added||new Date().toLocaleDateString('fr-FR'),capacite:h.capacite||'',photo_url:h.photo_url||''};
+}
+
+// ── SESSION ───────────────────────────────────────────────────────────────────
+function saveSession(u) { localStorage.setItem(SESSION_KEY,JSON.stringify(u)); }
+function loadSession() { try{return JSON.parse(localStorage.getItem(SESSION_KEY))}catch(e){return null} }
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+let pinVal = '';
+function pp(n) {
+  if(pinVal.length>=4) return;
+  pinVal+=n; updatePinDots();
+  if(pinVal.length===4) setTimeout(checkPin,150);
+}
+function pd() { pinVal=pinVal.slice(0,-1); updatePinDots(); document.getElementById('login-err').textContent=''; }
+function updatePinDots() { for(let i=0;i<4;i++) document.getElementById('pd'+i).classList.toggle('filled',i<pinVal.length); }
+
+function checkPin() {
+  const sel = document.getElementById('login-sel');
+  const opt = sel.options[sel.selectedIndex];
+  if(!opt||!opt.value) { document.getElementById('login-err').textContent='Sélectionnez votre nom'; pinVal=''; updatePinDots(); return; }
+  if(pinVal===opt.dataset.pin) {
+    currentUser={id:opt.value,nom:opt.dataset.nom,role:opt.dataset.role};
+    saveSession(currentUser); loginSuccess();
+  } else {
+    document.getElementById('login-err').textContent='Code PIN incorrect';
+    pinVal=''; updatePinDots();
+  }
+}
+
+async function loadUsers() {
+  const sel = document.getElementById('login-sel');
+  sel.innerHTML = '<option value="">Chargement...</option>';
+  try {
+    const r = await fetch(SUPA_URL+'/rest/v1/utilisateurs?select=id,nom,prenom,pin,role&order=prenom', {headers: H});
+    const data = await r.json();
+    sel.innerHTML = '<option value="">Sélectionnez votre nom...</option>';
+    if (!Array.isArray(data) || !data.length) {
+      sel.innerHTML = '<option value="">Aucun utilisateur trouvé</option>';
+      return;
+    }
+    data.forEach(u => {
+      const o = document.createElement('option');
+      o.value = u.id;
+      o.textContent = (u.prenom ? u.prenom+' ' : '')+u.nom;
+      o.dataset.pin = u.pin;
+      o.dataset.role = u.role;
+      o.dataset.nom = (u.prenom ? u.prenom+' ' : '')+u.nom;
+      sel.appendChild(o);
+    });
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erreur connexion Supabase</option>';
+  }
+}
+
+function loginSuccess() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('user-badge').textContent = currentUser.nom;
+  const navAdmin = document.getElementById('nav-admin');
+  if(currentUser.role==='admin'||currentUser.role==='gestionnaire') {
+    navAdmin.style.display='flex';
+  } else {
+    navAdmin.style.display='none';
+  }
+  startApp();
+}
+
+function logout() {
+  if(!confirm('Se déconnecter ?')) return;
+  clearSession(); currentUser=null; pinVal=''; updatePinDots();
+  document.getElementById('login-err').textContent='';
+  document.getElementById('nav-admin').style.display='none';
+  document.getElementById('login-screen').classList.remove('hidden');
+  loadUsers();
+}
 
 // ── MAP ───────────────────────────────────────────────────────────────────────
-let mapObj;
 function initMap() {
-  mapObj = L.map('map', { zoomControl: false, attributionControl: false, rotate: true, bearing: 0, touchRotate: true }).setView([47.0208, 4.8396], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapObj);
-  L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(mapObj);
-  mapObj.on('click', onMapClick);
-  locateMe();
+  mapObj = L.map('map',{zoomControl:false,attributionControl:false,rotate:true,bearing:0,touchRotate:true}).setView([47.0208,4.8396],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mapObj);
+  L.control.attribution({prefix:'© OpenStreetMap'}).addTo(mapObj);
+  mapObj.on('click',onMapClick);
 }
-function makeIcon(h, isNearest) {
-  const cls = isNearest ? 'hmarker nearest' : ('hmarker ' + (h.ok ? 'ok' : 'hs'));
-  const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
-  const size = isNearest ? [38,38] : [32,32];
-  return L.divIcon({ className: '', html: `<div class="${cls}">${emoji}</div>`, iconSize: size, iconAnchor: [size[0]/2, size[1]/2] });
+
+function makeIcon(h,near) {
+  const cls=near?'hm near':('hm '+(h.ok?'ok':'hs'));
+  const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
+  const sz=near?[38,38]:[32,32];
+  return L.divIcon({className:'',html:`<div class="${cls}">${e}</div>`,iconSize:sz,iconAnchor:[sz[0]/2,sz[1]/2]});
 }
+
 function renderMarkers() {
-  Object.values(markers).forEach(m => mapObj.removeLayer(m));
-  Object.keys(markers).forEach(k => delete markers[k]);
-  hydrants.forEach(h => {
-    if (!h.lat || !h.lng) return;
-    const m = L.marker([h.lat, h.lng], { icon: makeIcon(h, h.id === nearestId) });
-    m.on('click', () => { if (!addMode) showDetail(h.id); });
-    m.addTo(mapObj);
-    markers[h.id] = m;
+  Object.values(markers).forEach(m=>mapObj.removeLayer(m));
+  Object.keys(markers).forEach(k=>delete markers[k]);
+  hydrants.forEach(h=>{
+    if(!h.lat||!h.lng) return;
+    const m=L.marker([h.lat,h.lng],{icon:makeIcon(h,h.id===nearestId)});
+    m.on('click',()=>{if(!addMode) showDetail(h.id);});
+    m.addTo(mapObj); markers[h.id]=m;
   });
 }
-function updateMeMarker() {
-  if (!myLat) return;
-  if (meMarker) mapObj.removeLayer(meMarker);
-  meMarker = L.marker([myLat, myLng], {
-    icon: L.divIcon({ className: '', html: '<div class="hmarker-me"></div>', iconSize: [18,18], iconAnchor: [9,9] })
-  }).addTo(mapObj);
+
+function updateMe() {
+  if(!myLat) return;
+  if(meMarker) mapObj.removeLayer(meMarker);
+  meMarker=L.marker([myLat,myLng],{icon:L.divIcon({className:'',html:'<div class="hm-me"></div>',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(mapObj);
 }
+
 function locateMe() {
-  if (!navigator.geolocation) { showToast('Géolocalisation non disponible'); return; }
-  showToast('📍 Localisation en cours...');
-  navigator.geolocation.getCurrentPosition(pos => {
-    myLat = pos.coords.latitude; myLng = pos.coords.longitude;
-    updateMeMarker();
-    mapObj.setView([myLat, myLng], 15);
-    document.getElementById('gps-text').textContent = myLat.toFixed(5) + '° N, ' + myLng.toFixed(5) + '° E';
-    document.getElementById('f-lat').value = myLat;
-    document.getElementById('f-lng').value = myLng;
+  if(!navigator.geolocation){showToast('GPS non disponible');return;}
+  showToast('📍 Localisation...');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    myLat=pos.coords.latitude; myLng=pos.coords.longitude;
+    updateMe(); mapObj.setView([myLat,myLng],15);
     showToast('✓ Position obtenue');
-    renderList();
-  }, () => {
-    showToast('⚠️ GPS indisponible — activez la localisation');
-    document.getElementById('gps-text').textContent = 'GPS indisponible';
-  }, { enableHighAccuracy: true, timeout: 10000 });
+    renderList(); autoHighlight();
+  },()=>showToast('⚠️ GPS indisponible'),{enableHighAccuracy:true,timeout:10000});
+}
+
+function toggleFollow() {
+  followMode=!followMode;
+  document.getElementById('btn-follow').classList.toggle('on',followMode);
+  if(followMode) {
+    showToast('📍 Suivi activé');
+    followWatch=navigator.geolocation.watchPosition(pos=>{
+      myLat=pos.coords.latitude; myLng=pos.coords.longitude;
+      updateMe(); if(followMode) mapObj.panTo([myLat,myLng]);
+    },()=>{},{enableHighAccuracy:true,maximumAge:3000});
+    mapObj.once('dragstart',()=>{if(followMode){followMode=false;document.getElementById('btn-follow').classList.remove('on');navigator.geolocation.clearWatch(followWatch);}});
+  } else {
+    navigator.geolocation.clearWatch(followWatch);
+    showToast('Suivi désactivé');
+  }
 }
 
 // ── CITY SEARCH ───────────────────────────────────────────────────────────────
 function searchCity(q) {
   clearTimeout(searchTimeout);
-  const res = document.getElementById('map-search-results');
-  if (!q || q.length < 2) { res.classList.remove('show'); return; }
-  searchTimeout = setTimeout(async () => {
+  const res=document.getElementById('map-search-results');
+  if(!q||q.length<2){res.classList.remove('show');return;}
+  searchTimeout=setTimeout(async()=>{
     try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&countrycodes=fr`, { headers: { 'Accept-Language': 'fr' } });
-      const data = await r.json();
-      if (!data.length) { res.innerHTML = '<div class="search-result-item">Aucun résultat</div>'; res.classList.add('show'); return; }
-      res.innerHTML = data.map(d => {
-        const name = d.display_name.split(',').slice(0,3).join(', ');
-        return `<div class="search-result-item" onclick="goToPlace(${d.lat},${d.lon},'${name.replace(/'/g,"\\'")}')">📍 ${name}</div>`;
-      }).join('');
+      const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&countrycodes=fr`,{headers:{'Accept-Language':'fr'}});
+      const data=await r.json();
+      if(!data.length){res.innerHTML='<div class="search-item">Aucun résultat</div>';res.classList.add('show');return;}
+      res.innerHTML=data.map(d=>`<div class="search-item" onclick="goPlace(${d.lat},${d.lon})">📍 ${d.display_name.split(',').slice(0,3).join(', ')}</div>`).join('');
       res.classList.add('show');
-    } catch(e) { res.classList.remove('show'); }
-  }, 400);
+    } catch(e){res.classList.remove('show');}
+  },400);
 }
-function showSearchResults() { const q = document.getElementById('map-search-input').value; if (q && q.length >= 2) searchCity(q); }
-function goToPlace(lat, lng, name) {
-  mapObj.setView([lat, lng], 15);
-  document.getElementById('map-search-input').value = name;
+function goPlace(lat,lng) {
+  mapObj.setView([lat,lng],15);
   document.getElementById('map-search-results').classList.remove('show');
+  document.getElementById('map-search-input').value='';
 }
-document.addEventListener('click', e => { if (!document.getElementById('map-search-wrap').contains(e.target)) document.getElementById('map-search-results').classList.remove('show'); });
+document.addEventListener('click',e=>{if(!document.getElementById('map-search-wrap').contains(e.target))document.getElementById('map-search-results').classList.remove('show');});
 
-// ── PHOTO ─────────────────────────────────────────────────────────────────────
-function previewPhoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('qa-photo-img').src = e.target.result;
-    document.getElementById('qa-photo-preview').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
-}
+// ── DISTANCE ──────────────────────────────────────────────────────────────────
+function haversine(a,b,c,d){const R=6371000,da=(c-a)*Math.PI/180,db=(d-b)*Math.PI/180;const x=Math.sin(da/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(db/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function fmtDist(d){return d<1000?Math.round(d)+' m':(d/1000).toFixed(1)+' km';}
 
-function clearPhoto() {
-  document.getElementById('qa-photo').value = '';
-  document.getElementById('qa-photo-preview').style.display = 'none';
-  document.getElementById('qa-photo-img').src = '';
-}
-
-function previewFormPhoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('f-photo-img').src = e.target.result;
-    document.getElementById('f-photo-preview').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearFormPhoto() {
-  document.getElementById('f-photo').value = '';
-  document.getElementById('f-photo-preview').style.display = 'none';
-  document.getElementById('f-photo-img').src = '';
-  document.getElementById('f-photo-existing').value = '';
-}
-
-async function uploadPhoto(file, hydrantId) {
+async function getRoadDist(la1,lo1,la2,lo2) {
   try {
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `${hydrantId}_${Date.now()}.${ext}`;
-    const r = await fetch(`${SUPA_URL}/storage/v1/object/photos/${path}`, {
-      method: 'POST',
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': file.type },
-      body: file
-    });
-    if (r.ok) return `${SUPA_URL}/storage/v1/object/public/photos/${path}`;
-  } catch(e) { console.error(e); }
+    const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${lo1},${la1};${lo2},${la2}?overview=false`,{signal:AbortSignal.timeout(5000)});
+    const d=await r.json();
+    if(d.routes&&d.routes.length) return d.routes[0].distance;
+  } catch(e){}
   return null;
 }
 
 // ── ADD MODE ──────────────────────────────────────────────────────────────────
-function toggleAddMode() {
-  addMode = !addMode;
-  document.getElementById('btn-add-mode').classList.toggle('active-mode', addMode);
-  document.getElementById('add-mode-hint').classList.toggle('show', addMode);
-  mapObj.getContainer().style.cursor = addMode ? 'crosshair' : '';
+function toggleAdd() {
+  addMode=!addMode;
+  document.getElementById('btn-add').classList.toggle('on',addMode);
+  document.getElementById('add-hint').classList.toggle('show',addMode);
+  mapObj.getContainer().style.cursor=addMode?'crosshair':'';
 }
+
 function onMapClick(e) {
-  if (!addMode) return;
-  quickLat = e.latlng.lat; quickLng = e.latlng.lng; quickType = null;
-  document.getElementById('qa-coord').textContent = quickLat.toFixed(5) + '° N, ' + quickLng.toFixed(5) + '° E';
-  document.getElementById('qa-addr').value = '';
-  document.querySelectorAll('.qa-type-btn').forEach(b => b.classList.remove('selected'));
-  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${quickLat}&lon=${quickLng}&format=json&accept-language=fr`)
-    .then(r => r.json()).then(d => {
-      const parts = [d.address.road, d.address.house_number, d.address.city || d.address.town || d.address.village].filter(Boolean);
-      document.getElementById('qa-addr').value = parts.join(' ');
-    }).catch(() => {});
-  document.getElementById('overlay').classList.add('show');
-  document.getElementById('quick-add-sheet').classList.add('show');
-}
-function quickSelType(type, el) {
-  quickType = type;
-  document.querySelectorAll('.qa-type-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('qa-capacite-section').style.display = type === 'reservoir' ? 'block' : 'none';
-}
-async function confirmQuickAdd() {
-  if (!quickType) { showToast('Choisissez un type de point d\'eau'); return; }
-  const addr = document.getElementById('qa-addr').value.trim() || (quickLat.toFixed(4) + ', ' + quickLng.toFixed(4));
-  const anomaliesSelected = Array.from(document.querySelectorAll('#qa-anomalie-chips .anomalie-chip.selected')).map(el => el.dataset.val);
-  const anomalies = anomaliesSelected.join(', ');
-  const notes = document.getElementById('qa-notes').value.trim();
-  const notesStr = [anomalies ? '⚠️ Anomalies: ' + anomalies : '', notes].filter(Boolean).join(' | ');
-  const capaciteVal = document.getElementById('qa-capacite').value;
-  const capaciteUnit = document.getElementById('qa-capacite-unit').value;
-  const capacite = capaciteVal ? capaciteVal + ' ' + capaciteUnit : '';
-  const h = { id: genId(quickType), type: quickType, ok: true, addr, diam: '100 mm', pres: '', notes: notesStr, capacite, lat: quickLat, lng: quickLng, added: new Date().toLocaleDateString('fr-FR') };
-  cancelQuickAdd();
-  if (addMode) toggleAddMode();
-  showToast('⏳ Enregistrement...');
-  const ok = await dbInsert(h);
-  if (ok) {
-    // Upload photo if present
-    const photoInput = document.getElementById('qa-photo');
-    if (photoInput && photoInput.files && photoInput.files[0]) {
-      showToast('📷 Upload de la photo...');
-      const photoUrl = await uploadPhoto(photoInput.files[0], h.id);
-      if (photoUrl) {
-        h.photo_url = photoUrl;
-        await fetch(SUPA_URL + '/rest/v1/poteaux?identifiant=eq.' + encodeURIComponent(h.id), {
-          method: 'PATCH', headers: HEADERS, body: JSON.stringify({ photo_url: photoUrl })
-        });
-      }
-    }
-    hydrants.push(h); updateBadge(); renderMarkers(); renderList();
-    // Si anomalies, les enregistrer dans la table anomalies pour les gestionnaires
-    if (anomaliesSelected.length > 0) {
-      for (const anomalie of anomaliesSelected) {
-        await fetch(SUPA_URL + '/rest/v1/anomalies', {
-          method: 'POST', headers: HEADERS,
-          body: JSON.stringify({
-            poteau_id: h.id, poteau_addr: addr,
-            type_anomalie: anomalie,
-            description: notes,
-            signale_par: currentUser ? currentUser.nom : 'Inconnu',
-            caserne_id: 1, statut: 'en_cours'
-          })
-        });
-      }
-      showToast('⚠️ ' + anomaliesSelected.length + ' anomalie(s) signalée(s) aux gestionnaires');
-    } else {
-      showToast('✓ ' + h.id + ' ajouté et partagé !');
-    }
-    mapObj.setView([h.lat, h.lng], 16);
-    setTimeout(() => showDetail(h.id), 500);
-  } else { showToast('❌ Erreur de connexion'); }
-}
-function cancelQuickAdd() {
-  document.getElementById('quick-add-sheet').classList.remove('show');
-  document.getElementById('overlay').classList.remove('show');
-  quickLat = null; quickLng = null; quickType = null;
-  document.querySelectorAll('.qa-type-btn').forEach(b => { b.classList.remove('selected'); });
-  document.querySelectorAll('#qa-anomalie-chips .anomalie-chip').forEach(c => c.classList.remove('selected'));
-  document.getElementById('qa-addr').value = '';
-  document.getElementById('qa-notes').value = '';
-  document.getElementById('qa-capacite').value = '';
-  document.getElementById('qa-capacite-section').style.display = 'none';
+  if(!addMode) return;
+  quickLat=e.latlng.lat; quickLng=e.latlng.lng; quickType=null; quickEtat='ok';
+  document.getElementById('qa-coord').textContent=quickLat.toFixed(5)+'° N, '+quickLng.toFixed(5)+'° E';
+  document.getElementById('qa-id').value=genId('poteau');
+  document.getElementById('qa-addr').value='';
+  document.getElementById('qa-diam').value='100 mm';
+  document.getElementById('qa-pres').value='';
+  document.getElementById('qa-notes').value='';
+  document.getElementById('qa-etat-ok').className='radio-opt ok';
+  document.getElementById('qa-etat-hs').className='radio-opt';
+  document.querySelectorAll('#qa-anoms .anom-chip').forEach(c=>c.classList.remove('sel'));
   clearPhoto();
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('qt-poteau').classList.add('sel'); quickType='poteau';
+  document.getElementById('qa-cap-wrap').style.display='none';
+  document.getElementById('quick-add').classList.add('show');
+  // Reverse geocode
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${quickLat}&lon=${quickLng}&format=json&accept-language=fr`)
+    .then(r=>r.json()).then(d=>{
+      const p=[d.address.road,d.address.house_number,d.address.city||d.address.town||d.address.village].filter(Boolean);
+      document.getElementById('qa-addr').value=p.join(' ');
+    }).catch(()=>{});
 }
 
-// ── DETAIL SHEET ──────────────────────────────────────────────────────────────
-function showDetail(id) {
-  const h = hydrants.find(x => x.id === id);
-  if (!h) return;
-  const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
-  const crowDist = (myLat && h.lat) ? fmtDist(haversine(myLat, myLng, h.lat, h.lng)) : null;
-  document.getElementById('sheet-content').innerHTML = `
-    <div class="sheet-header">
-      <div class="sheet-icon" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${emoji}</div>
-      <div><div class="sheet-title">${h.id}</div><div class="sheet-sub">${h.addr}</div></div>
-    </div>
-    ${h.photo_url ? `<img src="${h.photo_url}" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--radius);margin-bottom:14px;" onclick="window.open('${h.photo_url}','_blank')" />` : ''}
-    ${crowDist ? `<div class="dist-banner" id="dist-banner-${id}">⏳ Calcul de la distance par la route...</div>` : ''}
-    <div class="sheet-grid">
-      <div class="sheet-field"><label>Type</label><span>${capitalize(h.type)}</span></div>
-      <div class="sheet-field"><label>Diamètre</label><span>${h.diam}</span></div>
-      <div class="sheet-field"><label>Pression</label><span>${h.pres ? h.pres + ' bar' : '—'}</span></div>
-      <div class="sheet-field"><label>État</label><span class="status-badge ${h.ok?'status-ok':'status-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
-      ${h.capacite ? `<div class="sheet-field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>` : ''}
-    </div>
-    ${h.notes ? `<div class="sheet-notes">📝 ${h.notes}</div>` : ''}
-    <button class="btn-primary" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer vers ce point d'eau</button>
-    <button class="btn-secondary" onclick="editHydrant('${h.id}')">✏️ Modifier</button>
-    <button class="btn-danger" onclick="deleteHydrant('${h.id}')">🗑 Supprimer</button>
-  `;
-  document.getElementById('nearest-banner').classList.remove('show');
-  document.getElementById('overlay').classList.add('show');
-  document.getElementById('bottom-sheet').classList.add('show');
-  // Fetch real road distance in background
-  if (myLat && h.lat) {
-    getRoadDistance(myLat, myLng, h.lat, h.lng).then(roadDist => {
-      const banner = document.getElementById('dist-banner-' + id);
-      if (banner) {
-        banner.innerHTML = roadDist
-          ? `🚗 À <strong>${fmtDist(roadDist)}</strong> par la route`
-          : `📍 À <strong>${crowDist}</strong> à vol d'oiseau`;
-      }
-    });
-  }
+function selType(t,el) {
+  quickType=t;
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('qa-id').value=genId(t);
+  document.getElementById('qa-cap-wrap').style.display=t==='reservoir'?'block':'none';
 }
-function closeSheet() { document.getElementById('bottom-sheet').classList.remove('show'); document.getElementById('overlay').classList.remove('show'); }
+function selEtat(e) {
+  quickEtat=e;
+  document.getElementById('qa-etat-ok').className='radio-opt'+(e==='ok'?' ok':'');
+  document.getElementById('qa-etat-hs').className='radio-opt'+(e==='hs'?' hs':'');
+}
+function togAnom(el) { el.classList.toggle('sel'); }
+function prevPhoto(inp) {
+  const f=inp.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{document.getElementById('qa-photo-img').src=e.target.result;document.getElementById('qa-photo-prev').style.display='block';};
+  r.readAsDataURL(f);
+}
+function clearPhoto() {
+  document.getElementById('qa-photo').value='';
+  document.getElementById('qa-photo-prev').style.display='none';
+  document.getElementById('qa-photo-img').src='';
+}
 
-// ── NEAREST ───────────────────────────────────────────────────────────────────
-async function getRoadDistance(lat1, lng1, lat2, lng2) {
+async function uploadPhoto(file,hid) {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const r = await fetch(url);
-    const d = await r.json();
-    if (d.routes && d.routes.length) return d.routes[0].distance;
-  } catch(e) {}
+    const ext=file.name.split('.').pop()||'jpg';
+    const path=`${hid}_${Date.now()}.${ext}`;
+    const r=await fetch(`${SUPA_URL}/storage/v1/object/photos/${path}`,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':file.type},body:file});
+    if(r.ok) return `${SUPA_URL}/storage/v1/object/public/photos/${path}`;
+  } catch(e){}
   return null;
 }
 
-async function findNearestByRoad() {
-  if (!myLat) return null;
-  const ops = hydrants.filter(h => h.ok && h.lat && h.lng);
-  if (!ops.length) return null;
-  // Pre-filter: keep only 5 closest by straight line to avoid too many API calls
-  ops.forEach(h => h._crow = haversine(myLat, myLng, h.lat, h.lng));
-  ops.sort((a, b) => a._crow - b._crow);
-  const candidates = ops.slice(0, 5);
-  // Get road distances for candidates
-  let best = null, bestRoadDist = Infinity;
-  for (const h of candidates) {
-    const d = await getRoadDistance(myLat, myLng, h.lat, h.lng);
-    if (d !== null && d < bestRoadDist) { bestRoadDist = d; best = h; best._roadDist = d; }
-  }
-  // Fallback to straight line if OSRM fails
-  if (!best) { best = candidates[0]; best._roadDist = null; }
-  return best;
+function genId(type) {
+  const p=type==='poteau'?'PI':type==='borne'?'BI':'RI';
+  const nums=hydrants.filter(h=>h.type===type).map(h=>parseInt((h.id.split('-')[1])||0));
+  return p+'-'+String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
 }
 
+async function confirmAdd() {
+  if(!quickType){showToast('Choisissez un type');return;}
+  const id=document.getElementById('qa-id').value.trim();
+  const addr=document.getElementById('qa-addr').value.trim()||quickLat.toFixed(4)+', '+quickLng.toFixed(4);
+  if(!id){showToast('Renseignez un identifiant');return;}
+  if(hydrants.find(h=>h.id===id)){showToast('Cet ID existe déjà');return;}
+  const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
+  const notes=[anoms.length?'⚠️ Anomalies: '+anoms.join(', '):'',document.getElementById('qa-notes').value.trim()].filter(Boolean).join(' | ');
+  const capVal=document.getElementById('qa-cap-val').value;
+  const cap=capVal?(capVal+' '+document.getElementById('qa-cap-unit').value):'';
+  const h={id,type:quickType,addr,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,photo_url:''};
+  cancelAdd();
+  if(addMode) toggleAdd();
+  showToast('⏳ Enregistrement...');
+  try {
+    await insertHydrant(toDb(h));
+    const photoFile=document.getElementById('qa-photo').files[0];
+    if(photoFile) {
+      showToast('📷 Upload photo...');
+      const url=await uploadPhoto(photoFile,h.id);
+      if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
+    }
+    if(anoms.length) {
+      for(const a of anoms) {
+        await dbFetch('anomalies',{method:'POST',body:JSON.stringify({poteau_id:h.id,poteau_addr:addr,type_anomalie:a,signale_par:currentUser.nom,caserne_id:1,statut:'en_cours'})});
+      }
+    }
+    hydrants.push(h); updateBadge(); renderMarkers(); renderList();
+    showToast('✓ '+h.id+' ajouté !');
+    mapObj.setView([h.lat,h.lng],16);
+    setTimeout(()=>showDetail(h.id),500);
+  } catch(e){showToast('❌ Erreur: '+e.message);}
+}
+
+function cancelAdd() {
+  document.getElementById('quick-add').classList.remove('show');
+  quickLat=null; quickLng=null;
+}
+
+// ── DETAIL ────────────────────────────────────────────────────────────────────
+function showDetail(id) {
+  const h=hydrants.find(x=>x.id===id); if(!h) return;
+  const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
+  const crowDist=myLat&&h.lat?fmtDist(haversine(myLat,myLng,h.lat,h.lng)):null;
+  document.getElementById('detail-body').innerHTML=`
+    <div class="sheet-hdr">
+      <div class="sheet-icon" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${e}</div>
+      <div><div class="sheet-title">${h.id}</div><div class="sheet-sub">${h.addr}</div></div>
+    </div>
+    ${h.photo_url?`<img src="${h.photo_url}" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);margin-bottom:14px" onclick="window.open('${h.photo_url}','_blank')"/>`:''}
+    ${crowDist?`<div class="dist-box" id="db-${id}">⏳ Calcul distance par la route...</div>`:''}
+    <div class="grid2">
+      <div class="field"><label>Type</label><span>${cap(h.type)}</span></div>
+      <div class="field"><label>Diamètre</label><span>${h.diam}</span></div>
+      <div class="field"><label>Pression</label><span>${h.pres?h.pres+' bar':'—'}</span></div>
+      <div class="field"><label>État</label><span class="${h.ok?'badge-ok':'badge-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
+      ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
+    </div>
+    ${h.notes?`<div class="notes-box">📝 ${h.notes}</div>`:''}
+    <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
+    <button class="btn-s" onclick="editH('${h.id}')">✏️ Modifier</button>
+    <button class="btn-d" onclick="delH('${h.id}')">🗑 Supprimer</button>
+  `;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('detail-sheet').classList.add('show');
+  document.getElementById('nearest-banner').classList.remove('show');
+  if(myLat&&h.lat) {
+    getRoadDist(myLat,myLng,h.lat,h.lng).then(rd=>{
+      const box=document.getElementById('db-'+id);
+      if(box) box.innerHTML=rd?`🚗 À <strong>${fmtDist(rd)}</strong> par la route`:`⚠️ Distance routière indisponible`;
+    });
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-sheet').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function editH(id) {
+  const h = hydrants.find(x=>x.id===id);
+  if(!h) return;
+  closeAll();
+  openAdd();
+  // Pre-fill form
+  setTimeout(()=>{
+    document.getElementById('qa-id').value = h.id;
+    document.getElementById('qa-addr').value = h.addr;
+    document.getElementById('qa-diam').value = h.diam;
+    document.getElementById('qa-pres').value = h.pres||'';
+    selType(h.type, document.getElementById('qt-'+h.type));
+    if(!h.ok) selEtat('hs'); else selEtat('ok');
+    document.getElementById('qa-notes').value = h.notes||'';
+    document.getElementById('qa-editing-id').value = h.id;
+  }, 300);
+}
+
+async function delH(id) {
+  if(!confirm('Supprimer ce point d\'eau ?')) return;
+  try {
+    await deleteHydrant(id);
+    hydrants=hydrants.filter(h=>h.id!==id);
+    updateBadge(); renderMarkers(); renderList(); closeAll();
+    showToast('✓ Supprimé');
+  } catch(e){showToast('❌ Erreur');}
+}
+
+// ── NEAREST ───────────────────────────────────────────────────────────────────
 async function findNearest() {
   closeAll();
-  const ops = hydrants.filter(h => h.ok && h.lat && h.lng);
-  if (!ops.length) { showToast('Aucun point d\'eau opérationnel'); return; }
-  if (!myLat) { showToast('Position GPS en cours...'); locateMe(); return; }
-  showToast('⏳ Calcul de l\'itinéraire...');
-  const best = await findNearestByRoad();
-  if (!best) { showToast('Aucun poteau trouvé'); return; }
-  nearestId = best.id; renderMarkers();
-  mapObj.setView([best.lat, best.lng], 16);
-  document.getElementById('nearest-name').textContent = best.id + ' — ' + best.addr;
-  const distLabel = best._roadDist ? '🚗 ' + fmtDist(best._roadDist) : '📍 ' + fmtDist(best._crow);
-  document.getElementById('nearest-chips').innerHTML = `<div class="chip blue">${distLabel}</div><div class="chip">🔧 ${best.diam}</div><div class="chip green">✓ Opérationnel</div>`;
-  document.getElementById('nearest-nav-btn').onclick = () => navigate(best.lat, best.lng);
+  const ops=hydrants.filter(h=>h.ok&&h.lat&&h.lng);
+  if(!ops.length){showToast('Aucun point d\'eau opérationnel');return;}
+  if(!myLat){showToast('GPS en cours...');locateMe();return;}
+  showToast('⏳ Calcul itinéraire...');
+  ops.forEach(h=>h._crow=haversine(myLat,myLng,h.lat,h.lng));
+  ops.sort((a,b)=>a._crow-b._crow);
+  const cands=ops.slice(0,5);
+  let best=cands[0],bestDist=null;
+  for(const h of cands){
+    const d=await getRoadDist(myLat,myLng,h.lat,h.lng);
+    if(d!==null&&(bestDist===null||d<bestDist)){bestDist=d;best=h;}
+  }
+  nearestId=best.id; renderMarkers();
+  mapObj.setView([best.lat,best.lng],16);
+  document.getElementById('nb-name').textContent=best.id+' — '+best.addr;
+  document.getElementById('nb-chips').innerHTML=`<div class="chip b">${bestDist?'🚗 '+fmtDist(bestDist):'⚠️ Distance indisponible'}</div><div class="chip">🔧 ${best.diam}</div><div class="chip g">✓ Opérationnel</div>`;
+  document.getElementById('nb-nav').onclick=()=>navigate(best.lat,best.lng);
   document.getElementById('overlay').classList.add('show');
   document.getElementById('nearest-banner').classList.add('show');
 }
-function closeNearest() { document.getElementById('nearest-banner').classList.remove('show'); document.getElementById('overlay').classList.remove('show'); nearestId = null; renderMarkers(); }
-function closeAll() { closeSheet(); closeNearest(); cancelQuickAdd(); if (addMode) toggleAddMode(); }
-function navigate(lat, lng) { window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank'); }
 
-// ── FORM ──────────────────────────────────────────────────────────────────────
-function selType(t) {
-  selectedType = t;
-  ['poteau','borne','reservoir'].forEach(x => document.getElementById('t-'+x).className = 'radio-option');
-  document.getElementById('t-'+t).classList.add('sel-type');
-  if (!document.getElementById('edit-id').value) document.getElementById('f-id').value = genId(t);
-  // Show capacity field only for reservoir
-  document.getElementById('section-capacite').style.display = t === 'reservoir' ? 'block' : 'none';
+function closeNearest() {
+  document.getElementById('nearest-banner').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+  nearestId=null; renderMarkers();
 }
 
-function toggleAnomalie(el, val) {
-  el.classList.toggle('selected');
-  el.dataset.val = val;
+async function autoHighlight() {
+  if(!myLat||!hydrants.length) return;
+  const ops=hydrants.filter(h=>h.ok&&h.lat&&h.lng);
+  if(!ops.length) return;
+  ops.forEach(h=>h._crow=haversine(myLat,myLng,h.lat,h.lng));
+  ops.sort((a,b)=>a._crow-b._crow);
+  nearestId=ops[0].id; renderMarkers();
 }
 
-function getAnomalies() {
-  return Array.from(document.querySelectorAll('.anomalie-chip.selected')).map(el => el.textContent.trim()).join(', ');
+function closeAll() {
+  closeDetail(); closeNearest();
+  if(addMode) toggleAdd();
 }
 
-function resetAnomalies() {
-  document.querySelectorAll('.anomalie-chip').forEach(el => el.classList.remove('selected'));
-}
-function selEtat(e) {
-  selectedEtat = e;
-  document.getElementById('e-ok').className = 'radio-option' + (e==='ok' ? ' sel-ok' : '');
-  document.getElementById('e-hs').className = 'radio-option' + (e==='hs' ? ' sel-hs' : '');
-}
-function resetForm() {
-  document.getElementById('edit-id').value = '';
-  document.getElementById('form-title').textContent = 'Ajouter un point d\'eau';
-  document.getElementById('submit-label').textContent = 'Enregistrer le point d\'eau';
-  selectedType = 'poteau'; selectedEtat = 'ok';
-  ['poteau','borne','reservoir'].forEach(x => document.getElementById('t-'+x).className = 'radio-option');
-  document.getElementById('t-poteau').classList.add('sel-type');
-  document.getElementById('e-ok').className = 'radio-option sel-ok';
-  document.getElementById('e-hs').className = 'radio-option';
-  document.getElementById('f-id').value = genId('poteau');
-  ['f-addr','f-pres','f-notes','f-capacite'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-diam').value = '100 mm';
-  document.getElementById('section-capacite').style.display = 'none';
-  resetAnomalies();
-  clearFormPhoto();
-  locateMe();
-}
-async function submitForm() {
-  const id = document.getElementById('f-id').value.trim();
-  const addr = document.getElementById('f-addr').value.trim();
-  if (!id) { showToast('Veuillez renseigner un identifiant'); return; }
-  if (!addr) { showToast('Veuillez renseigner une adresse'); return; }
-  const editId = document.getElementById('edit-id').value;
-  const lat = parseFloat(document.getElementById('f-lat').value) || myLat;
-  const lng = parseFloat(document.getElementById('f-lng').value) || myLng;
-  const anomalies = getAnomalies();
-  const capacite = document.getElementById('f-capacite').value;
-  const capaciteUnit = document.getElementById('f-capacite-unit').value;
-  const capaciteStr = capacite ? capacite + ' ' + capaciteUnit : '';
-  const notesRaw = document.getElementById('f-notes').value.trim();
-  const notes = [anomalies ? '⚠️ Anomalies: ' + anomalies : '', notesRaw].filter(Boolean).join(' | ');
-  const h = { id, addr, type: selectedType, ok: selectedEtat === 'ok', diam: document.getElementById('f-diam').value, pres: document.getElementById('f-pres').value, notes, capacite: capaciteStr, lat, lng, added: editId ? undefined : new Date().toLocaleDateString('fr-FR'), photo_url: document.getElementById('f-photo-existing').value || '' };
-  showToast('⏳ Enregistrement...');
-  if (editId) {
-    const ok = await dbUpdate(h);
-    if (ok) { const i = hydrants.findIndex(x => x.id === editId); if (i >= 0) { h.added = hydrants[i].added; hydrants[i] = h; } }
-    else { showToast('❌ Erreur'); return; }
-  } else {
-    if (hydrants.find(x => x.id === id)) { showToast('Cet identifiant existe déjà'); return; }
-    const ok = await dbInsert(h);
-    if (ok) hydrants.push(h);
-    else { showToast('❌ Erreur'); return; }
-  }
-  // Upload new photo if selected
-  const photoInput = document.getElementById('f-photo');
-  if (photoInput && photoInput.files && photoInput.files[0]) {
-    showToast('📷 Upload de la photo...');
-    const photoUrl = await uploadPhoto(photoInput.files[0], h.id);
-    if (photoUrl) {
-      h.photo_url = photoUrl;
-      await fetch(SUPA_URL + '/rest/v1/poteaux?identifiant=eq.' + encodeURIComponent(h.id), {
-        method: 'PATCH', headers: HEADERS, body: JSON.stringify({ photo_url: photoUrl })
-      });
-      const i = hydrants.findIndex(x => x.id === h.id);
-      if (i >= 0) hydrants[i].photo_url = photoUrl;
-    }
-  }
-  updateBadge(); renderMarkers(); renderList();
-  // Enregistrer anomalies si nouveau poteau avec anomalies
-  if (!editId) {
-    const anomaliesSelected = Array.from(document.querySelectorAll('#anomalie-chips .anomalie-chip.selected')).map(el => el.dataset.val);
-    if (anomaliesSelected.length > 0) {
-      for (const anomalie of anomaliesSelected) {
-        await fetch(SUPA_URL + '/rest/v1/anomalies', {
-          method: 'POST', headers: HEADERS,
-          body: JSON.stringify({ poteau_id: h.id, poteau_addr: h.addr, type_anomalie: anomalie, signale_par: currentUser ? currentUser.nom : 'Inconnu', caserne_id: 1, statut: 'en_cours' })
-        });
-      }
-    }
-  }
-  showToast(editId ? '✓ Modifié et synchronisé !' : '✓ Ajouté et partagé !');
-  resetForm(); switchTab('map');
-  if (h.lat && h.lng) mapObj.setView([h.lat, h.lng], 16);
-}
-function editHydrant(id) {
-  const h = hydrants.find(x => x.id === id);
-  if (!h) return;
-  closeSheet();
-  document.getElementById('form-title').textContent = 'Modifier le point d\'eau';
-  document.getElementById('submit-label').textContent = 'Enregistrer les modifications';
-  document.getElementById('edit-id').value = h.id;
-  selType(h.type); selEtat(h.ok ? 'ok' : 'hs');
-  document.getElementById('f-id').value = h.id;
-  document.getElementById('f-addr').value = h.addr;
-  document.getElementById('f-diam').value = h.diam;
-  document.getElementById('f-pres').value = h.pres || '';
-  document.getElementById('f-notes').value = h.notes || '';
-  // Show existing photo if any
-  clearFormPhoto();
-  if (h.photo_url) {
-    document.getElementById('f-photo-existing').value = h.photo_url;
-    document.getElementById('f-photo-img').src = h.photo_url;
-    document.getElementById('f-photo-preview').style.display = 'block';
-  }
-  if (h.lat) { document.getElementById('f-lat').value = h.lat; document.getElementById('f-lng').value = h.lng; document.getElementById('gps-text').textContent = h.lat.toFixed(5) + '° N, ' + h.lng.toFixed(5) + '° E'; }
-  switchTab('add');
-}
-async function deleteHydrant(id) {
-  if (!confirm('Supprimer ce point d\'eau ?')) return;
-  showToast('⏳ Suppression...');
-  const ok = await dbDelete(id);
-  if (ok) { hydrants = hydrants.filter(h => h.id !== id); updateBadge(); renderMarkers(); renderList(); closeAll(); showToast('✓ Poteau supprimé'); }
-  else showToast('❌ Erreur de suppression');
-}
+function navigate(lat,lng) { window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,'_blank'); }
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
-function setFilter(f, el) { activeFilter = f; document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); renderList(); }
+function setFilter(f,el) {
+  activeFilter=f;
+  document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); renderList();
+}
 function renderList() {
-  const q = (document.getElementById('list-search-input').value || '').toLowerCase();
-  let list = hydrants.filter(h => {
-    if (activeFilter === 'ok') return h.ok;
-    if (activeFilter === 'hs') return !h.ok;
-    if (['poteau','borne','reservoir'].includes(activeFilter)) return h.type === activeFilter;
+  const q=(document.getElementById('list-search-input').value||'').toLowerCase();
+  let list=hydrants.filter(h=>{
+    if(activeFilter==='ok') return h.ok;
+    if(activeFilter==='hs') return !h.ok;
+    if(['poteau','borne','reservoir'].includes(activeFilter)) return h.type===activeFilter;
     return true;
-  }).filter(h => !q || h.id.toLowerCase().includes(q) || h.addr.toLowerCase().includes(q));
-  if (myLat) {
-    list.forEach(h => { h._dist = (h.lat && h.lng) ? haversine(myLat, myLng, h.lat, h.lng) : Infinity; });
-    list.sort((a,b) => a._dist - b._dist);
-  }
-  const container = document.getElementById('hydrant-list');
-  if (!list.length) { container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Aucun point d'eau trouvé</p><span>Modifiez votre recherche ou ajoutez un poteau</span></div>`; return; }
-  container.innerHTML = list.map(h => {
-    const emoji = h.type === 'poteau' ? '🔴' : h.type === 'borne' ? '💧' : '🏊';
-    const dist = (myLat && h.lat && h._dist !== Infinity) ? fmtDist(h._dist) : '';
-    return `<div class="hydrant-item" onclick="switchTab('map'); setTimeout(()=>showDetail('${h.id}'),300)">
-      <div class="item-icon ${h.ok?'ok':'hs'}">${emoji}</div>
-      <div class="item-info"><div class="item-name">${h.id}</div><div class="item-addr">${h.addr}</div></div>
-      <div class="item-meta">
-        <div class="item-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>
-        ${dist ? `<div class="item-dist">📍 ${dist}</div>` : ''}
-      </div>
+  }).filter(h=>!q||h.id.toLowerCase().includes(q)||h.addr.toLowerCase().includes(q));
+  if(myLat){list.forEach(h=>h._d=(h.lat&&h.lng)?haversine(myLat,myLng,h.lat,h.lng):Infinity);list.sort((a,b)=>a._d-b._d);}
+  const c=document.getElementById('h-list');
+  if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>Aucun résultat</p></div>`;return;}
+  c.innerHTML=list.map(h=>{
+    const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
+    const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
+    return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}'),300)">
+      <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
+      <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
+      <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>
     </div>`;
   }).join('');
 }
 
-// ── SESSION & AUTH ────────────────────────────────────────────────────────────
-const SESSION_KEY = 'fh_session';
-let currentUser = null;
-
-function saveSession(user) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-}
-function loadSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; }
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-async function loadUsers() {
-  try {
-    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?select=*&actif=eq.true&order=nom', { headers: HEADERS });
-    const data = await r.json();
-    const sel = document.getElementById('login-user-select');
-    sel.innerHTML = '<option value="">Sélectionnez votre nom...</option>';
-    data.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.prenom ? u.prenom + ' ' + u.nom : u.nom;
-      opt.dataset.pin = u.pin;
-      opt.dataset.role = u.role;
-      opt.dataset.nom = u.prenom ? u.prenom + ' ' + u.nom : u.nom;
-      sel.appendChild(opt);
-    });
-  } catch(e) { console.error(e); }
-}
-
-let pinValue = '';
-function pinPress(n) {
-  if (pinValue.length >= 4) return;
-  pinValue += n;
-  updatePinDisplay();
-  if (pinValue.length === 4) setTimeout(checkPin, 150);
-}
-function pinDel() {
-  pinValue = pinValue.slice(0, -1);
-  updatePinDisplay();
-  document.getElementById('login-error').textContent = '';
-}
-function updatePinDisplay() {
-  for (let i = 0; i < 4; i++) {
-    document.getElementById('pd' + i).classList.toggle('filled', i < pinValue.length);
-  }
-}
-function checkPin() {
-  const sel = document.getElementById('login-user-select');
-  const opt = sel.options[sel.selectedIndex];
-  if (!opt || !opt.value) {
-    document.getElementById('login-error').textContent = 'Sélectionnez votre nom';
-    pinValue = ''; updatePinDisplay(); return;
-  }
-  if (pinValue === opt.dataset.pin) {
-    const user = { id: opt.value, nom: opt.dataset.nom, role: opt.dataset.role };
-    currentUser = user;
-    saveSession(user);
-    onLoginSuccess();
-  } else {
-    document.getElementById('login-error').textContent = 'Code PIN incorrect';
-    pinValue = ''; updatePinDisplay();
-  }
-}
-
-function onLoginSuccess() {
-  document.getElementById('login-screen').classList.add('hidden');
-  document.getElementById('user-badge-name').textContent = currentUser.nom;
-  // Show admin/gestion tab for gestionnaire and admin
-  if (currentUser.role === 'admin' || currentUser.role === 'gestionnaire') {
-    document.getElementById('nav-admin').style.display = 'flex';
-  } else {
-    document.getElementById('nav-admin').style.display = 'none';
-  }
-  startApp();
-}
-
-function showUserMenu() {
-  const choice = confirm('Que souhaitez-vous faire ?\n\nOK = Changer mon PIN\nAnnuler = Se déconnecter');
-  if (choice) showChangePin();
-  else logout();
-}
-
-function logout() {
-  if (!confirm('Se déconnecter ?')) return;
-  clearSession();
-  currentUser = null;
-  pinValue = ''; updatePinDisplay();
-  document.getElementById('login-error').textContent = '';
-  document.getElementById('login-user-select').value = '';
-  document.getElementById('nav-admin').style.display = 'none';
-  document.getElementById('login-screen').classList.remove('hidden');
-}
-
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 async function loadAdminData() {
-  // Load users
   try {
-    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?select=*&order=nom', { headers: HEADERS });
-    const users = await r.json();
-    const roleEmoji = { pompier: '👨‍🚒', gestionnaire: '👨‍💼', admin: '👑' };
-    const roleColor = { pompier: '#2563EB', gestionnaire: '#D97706', admin: '#DC2626' };
-    document.getElementById('admin-users-list').innerHTML = users.map(u => `
-      <div class="user-row">
-        <div class="user-avatar" style="background:${roleColor[u.role]||'#888'}">${(u.prenom||u.nom).charAt(0).toUpperCase()}</div>
-        <div class="user-info">
-          <div class="user-name">${u.prenom ? u.prenom + ' ' + u.nom : u.nom}</div>
-          <div class="user-role">${roleEmoji[u.role]||''} ${capitalize(u.role)}</div>
-        </div>
-        ${currentUser.role === 'admin' ? `<button onclick="deleteUser(${u.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">🗑</button>` : ''}
+    const users=await getUsers();
+    const rc={pompier:'#2563EB',gestionnaire:'#D97706',admin:'#DC2626'};
+    const re={pompier:'👨‍🚒',gestionnaire:'👨‍💼',admin:'👑'};
+    document.getElementById('admin-users').innerHTML=users.map(u=>`
+      <div class="u-row">
+        <div class="u-av" style="background:${rc[u.role]||'#888'}">${(u.prenom||u.nom).charAt(0).toUpperCase()}</div>
+        <div class="u-info"><div class="u-name">${u.prenom?u.prenom+' ':''  }${u.nom}</div><div class="u-role">${re[u.role]||''} ${cap(u.role)}</div></div>
+        ${currentUser.role==='admin'?`<button onclick="delUser(${u.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">🗑</button>`:''}
       </div>`).join('');
-  } catch(e) {}
-  // Load anomalies
+  } catch(e){document.getElementById('admin-users').innerHTML='Erreur de chargement';}
   try {
-    const r = await fetch(SUPA_URL + '/rest/v1/anomalies?select=*&order=created_at.desc&limit=20', { headers: HEADERS });
-    const anomalies = await r.json();
-    if (!anomalies.length) { document.getElementById('admin-anomalies-list').innerHTML = '<div style="color:var(--gray-400);font-size:13px;">Aucune anomalie signalée</div>'; return; }
-    document.getElementById('admin-anomalies-list').innerHTML = anomalies.map(a => `
-      <div class="anomalie-row">
-        <div class="anomalie-top">
-          <div class="anomalie-name">${a.poteau_id || '—'}</div>
-          <div class="statut-chip statut-${a.statut}">${a.statut === 'en_cours' ? '⚠️ En cours' : '✅ Résolu'}</div>
-        </div>
-        <div class="anomalie-meta">${a.poteau_addr || ''} • ${a.type_anomalie || ''}</div>
-        <div class="anomalie-meta">${a.signale_par || ''} • ${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
-        ${a.statut === 'en_cours' ? `<button onclick="resolveAnomalie(${a.id})" style="margin-top:6px;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;">✅ Marquer résolu</button>` : ''}
+    const anoms=await dbFetch('anomalies?select=*&order=created_at.desc&limit=20');
+    if(!anoms||!anoms.length){document.getElementById('admin-anomalies').innerHTML='<div style="color:var(--gray-400);font-size:13px">Aucune anomalie</div>';return;}
+    document.getElementById('admin-anomalies').innerHTML=anoms.map(a=>`
+      <div class="an-row">
+        <div class="an-top"><div class="an-name">${a.poteau_id||'—'}</div><div class="st-chip ${a.statut==='en_cours'?'st-ec':'st-rs'}">${a.statut==='en_cours'?'⚠️ En cours':'✅ Résolu'}</div></div>
+        <div class="an-meta">${a.poteau_addr||''} • ${a.type_anomalie||''}</div>
+        <div class="an-meta">${a.signale_par||''} • ${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
+        ${a.statut==='en_cours'?`<button onclick="resolveAnom(${a.id})" style="margin-top:6px;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px">✅ Résolu</button>`:''}
       </div>`).join('');
-  } catch(e) {}
+  } catch(e){}
 }
 
-async function resolveAnomalie(id) {
-  await fetch(SUPA_URL + '/rest/v1/anomalies?id=eq.' + id, {
-    method: 'PATCH', headers: HEADERS, body: JSON.stringify({ statut: 'resolu' })
-  });
+async function resolveAnom(id) {
+  await dbFetch('anomalies?id=eq.'+id,{method:'PATCH',body:JSON.stringify({statut:'resolu'})});
   loadAdminData(); showToast('✅ Anomalie résolue');
 }
-
-async function deleteUser(id) {
-  if (!confirm('Supprimer cet utilisateur ?')) return;
-  await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + id, { method: 'DELETE', headers: HEADERS });
-  loadAdminData(); loadUsers(); showToast('✓ Utilisateur supprimé');
+async function delUser(id) {
+  if(!confirm('Supprimer cet utilisateur ?')) return;
+  await dbFetch('utilisateurs?id=eq.'+id,{method:'DELETE'});
+  loadAdminData(); loadUsers(); showToast('✓ Supprimé');
 }
-
-function showChangePin() {
-  document.getElementById('old-pin').value = '';
-  document.getElementById('new-pin-change').value = '';
-  document.getElementById('confirm-pin-change').value = '';
-  document.getElementById('change-pin-sheet').style.display = 'block';
-}
-
-async function saveChangePin() {
-  const oldPin = String(document.getElementById('old-pin').value).trim();
-  const newPin = String(document.getElementById('new-pin-change').value).trim();
-  const confirmPin = String(document.getElementById('confirm-pin-change').value).trim();
-  if (newPin.length !== 4) { showToast('Le nouveau PIN doit faire 4 chiffres'); return; }
-  if (newPin !== confirmPin) { showToast('Les deux PIN ne correspondent pas'); return; }
-  // Verify old PIN
+async function createUser() {
+  const nom=document.getElementById('nu-nom').value.trim();
+  const prenom=document.getElementById('nu-prenom').value.trim();
+  const role=document.getElementById('nu-role').value;
+  const pin=String(document.getElementById('nu-pin').value).trim();
+  if(!nom||pin.length!==4){showToast('Remplissez tous les champs (PIN = 4 chiffres)');return;}
   try {
-    const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + currentUser.id + '&pin=eq.' + oldPin, { headers: HEADERS });
-    const data = await r.json();
-    if (!data.length) { showToast('❌ Ancien PIN incorrect'); return; }
-    // Update PIN
-    const u = await fetch(SUPA_URL + '/rest/v1/utilisateurs?id=eq.' + currentUser.id, {
-      method: 'PATCH', headers: HEADERS, body: JSON.stringify({ pin: newPin })
-    });
-    if (u.ok) {
-      showToast('✓ PIN modifié avec succès !');
-      document.getElementById('change-pin-sheet').style.display = 'none';
-    } else showToast('❌ Erreur lors de la modification');
-  } catch(e) { showToast('❌ Erreur de connexion'); }
-}
-
-function showAddUser() {
-  document.getElementById('add-user-sheet').style.display = 'block';
-}
-
-async function saveNewUser() {
-  const nom = document.getElementById('new-nom').value.trim();
-  const prenom = document.getElementById('new-prenom').value.trim();
-  const role = document.getElementById('new-role').value;
-  const pin = String(document.getElementById('new-pin').value).trim();
-  if (!nom || pin.length !== 4) { showToast('Remplissez tous les champs (PIN = 4 chiffres)'); return; }
-  const r = await fetch(SUPA_URL + '/rest/v1/utilisateurs', {
-    method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' },
-    body: JSON.stringify({ nom, prenom, pin, role, caserne_id: 1, actif: true })
-  });
-  if (r.ok) {
+    await dbFetch('utilisateurs',{method:'POST',body:JSON.stringify({nom,prenom,pin,role,caserne_id:1,actif:true})});
     showToast('✓ Compte créé !');
-    document.getElementById('add-user-sheet').style.display = 'none';
-    document.getElementById('new-nom').value = '';
-    document.getElementById('new-prenom').value = '';
-    document.getElementById('new-pin').value = '';
+    hideSub('sub-add-user');
+    document.getElementById('nu-nom').value='';
+    document.getElementById('nu-prenom').value='';
+    document.getElementById('nu-pin').value='';
     loadAdminData(); loadUsers();
-  } else showToast('❌ Erreur lors de la création');
+  } catch(e){showToast('❌ Erreur');}
+}
+
+// ── PROFIL ────────────────────────────────────────────────────────────────────
+function loadProfilData() {
+  if(!currentUser) return;
+  const rc={pompier:'#2563EB',gestionnaire:'#D97706',admin:'#DC2626'};
+  const re={pompier:'👨‍🚒 Pompier',gestionnaire:'👨‍💼 Gestionnaire',admin:'👑 Admin'};
+  document.getElementById('pav').textContent=currentUser.nom.charAt(0).toUpperCase();
+  document.getElementById('pav').style.background=rc[currentUser.role]||'#888';
+  document.getElementById('pnom').textContent=currentUser.nom;
+  document.getElementById('prole').textContent=re[currentUser.role]||currentUser.role;
+}
+async function changePin() {
+  const old=String(document.getElementById('cp-old').value).trim();
+  const nw=String(document.getElementById('cp-new').value).trim();
+  const conf=String(document.getElementById('cp-confirm').value).trim();
+  if(nw.length!==4){showToast('Le nouveau PIN doit faire 4 chiffres');return;}
+  if(nw!==conf){showToast('Les PIN ne correspondent pas');return;}
+  try {
+    const data=await dbFetch('utilisateurs?id=eq.'+currentUser.id+'&pin=eq.'+old);
+    if(!data||!data.length){showToast('❌ Ancien PIN incorrect');return;}
+    await dbFetch('utilisateurs?id=eq.'+currentUser.id,{method:'PATCH',body:JSON.stringify({pin:nw})});
+    showToast('✓ PIN modifié !');
+    hideSub('sub-change-pin');
+    document.getElementById('cp-old').value='';
+    document.getElementById('cp-new').value='';
+    document.getElementById('cp-confirm').value='';
+  } catch(e){showToast('❌ Erreur');}
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────────
-function switchTab(tab) {
-  if (tab === 'admin' && currentUser && currentUser.role === 'pompier') {
-    showToast('⛔ Accès réservé aux gestionnaires'); return;
-  }
-  ['map','list','add','admin'].forEach(t => {
-    const s = document.getElementById('screen-'+t);
-    const n = document.getElementById('nav-'+t);
-    if (s) s.classList.toggle('active', t === tab);
-    if (n) n.classList.toggle('active', t === tab);
+function goTab(tab) {
+  ['map','list','admin','profil'].forEach(t=>{
+    const s=document.getElementById('screen-'+t);
+    const n=document.getElementById('nav-'+t);
+    if(s) s.classList.toggle('active',t===tab);
+    if(n) n.classList.toggle('active',t===tab);
   });
-  if (tab === 'add' && !document.getElementById('edit-id').value) resetForm();
-  if (tab === 'list') renderList();
-  if (tab === 'admin') loadAdminData();
-  if (tab === 'map') { closeAll(); setTimeout(() => mapObj.invalidateSize(), 50); }
+  if(tab==='list') renderList();
+  if(tab==='admin') loadAdminData();
+  if(tab==='profil') loadProfilData();
+  if(tab==='map'){closeAll();setTimeout(()=>mapObj.invalidateSize(),50);}
 }
+
+function showSub(id) { document.getElementById(id).classList.add('show'); }
+function hideSub(id) { document.getElementById(id).classList.remove('show'); }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
-function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
-function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
-
-function resetNorth() {
-  if (mapObj && mapObj.setBearing) { mapObj.setBearing(0); showToast('⬆️ Nord remis en haut'); }
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
 }
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function updateBadge(){const n=hydrants.length;document.getElementById('count-badge').textContent=n+(n>1?' points':' point');}
 
-// ── COMPASS & FOLLOW MODE ─────────────────────────────────────────────────────
-let compassActive = false;
-let followActive = false;
-let watchId = null;
-let lastHeading = 0;
-let headingBuffer = [];
-
-function toggleFollow() {
-  followActive = !followActive;
-  const btn = document.getElementById('btn-follow');
-  btn.classList.toggle('active-mode', followActive);
-  if (followActive) {
-    showToast('📍 Suivi activé');
-    if (watchId) navigator.geolocation.clearWatch(watchId);
-    watchId = navigator.geolocation.watchPosition(pos => {
-      myLat = pos.coords.latitude; myLng = pos.coords.longitude;
-      updateMeMarker();
-      if (followActive) mapObj.panTo([myLat, myLng], { animate: true, duration: 0.5 });
-      document.getElementById('gps-text').textContent = myLat.toFixed(5) + '° N, ' + myLng.toFixed(5) + '° E';
-    }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
-    mapObj.once('dragstart', () => {
-      if (followActive) { followActive = false; btn.classList.remove('active-mode'); showToast('Suivi désactivé'); if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; } }
-    });
-  } else {
-    showToast('Suivi désactivé');
-    if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-  }
-}
-
-// ── START APP (after login) ───────────────────────────────────────────────────
+// ── START ─────────────────────────────────────────────────────────────────────
 async function startApp() {
   initMap();
-  showToast('🔄 Chargement des données...');
-  const data = await dbGet();
-  if (data) {
-    hydrants = data; updateBadge(); renderMarkers(); renderList();
-    showToast('✅ ' + hydrants.length + ' point(s) chargé(s)');
-    // Auto-highlight nearest once GPS is ready
-    autoHighlightNearest();
-  } else {
-    showToast('❌ Impossible de charger les données');
-  }
-  document.getElementById('f-id').value = genId('poteau');
-}
-
-async function autoHighlightNearest() {
-  // Wait for GPS (max 10s)
-  let waited = 0;
-  while (!myLat && waited < 10000) { await new Promise(r => setTimeout(r, 500)); waited += 500; }
-  if (!myLat) return;
-  const best = await findNearestByRoad();
-  if (best) { nearestId = best.id; renderMarkers(); }
-}
-
-// ── SERVICE WORKER (PWA) ──────────────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  });
+  showToast('🔄 Chargement...');
+  try {
+    const data=await getHydrants();
+    hydrants=(data||[]).map(toH);
+    updateBadge(); renderMarkers(); renderList();
+    showToast('✅ '+hydrants.length+' point(s) chargé(s)');
+    locateMe();
+  } catch(e){showToast('❌ Erreur de chargement');}
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// Register Service Worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/FireHydrant/sw.js').catch(err => console.log('SW:', err));
-}
-
 async function init() {
+  // Unregister old service workers
+  if('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
+  }
   await loadUsers();
-  // Check for existing session
-  const session = loadSession();
-  if (session) {
-    currentUser = session;
-    onLoginSuccess();
+  const session=loadSession();
+  if(session) {
+    currentUser=session;
+    loginSuccess();
   }
 }
 init();

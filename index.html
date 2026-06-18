@@ -454,7 +454,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <img id="qa-photo-img"/>
       <button onclick="clearPhoto()" style="width:100%;margin-top:6px;padding:8px;background:var(--red-light);color:var(--red);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer">✕ Supprimer</button>
     </div>
-    <label class="photo-lbl">📷 Prendre ou choisir une photo<input type="file" id="qa-photo" accept="image/*" style="display:none" onchange="prevPhoto(this)"/></label>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <label class="photo-lbl" style="flex:1">📷 Appareil photo<input type="file" id="qa-photo" accept="image/*" capture="environment" style="display:none" onchange="prevPhoto(this)"/></label>
+      <label class="photo-lbl" style="flex:1">🖼️ Galerie<input type="file" id="qa-photo-gallery" accept="image/*" style="display:none" onchange="prevPhotoGallery(this)"/></label>
+    </div>
     <div class="divider"></div>
     <button class="btn-p" onclick="confirmAdd()">✓ Enregistrer le point d'eau</button>
     <button class="btn-s" onclick="cancelAdd()" style="margin-bottom:16px">Annuler</button>
@@ -763,8 +766,15 @@ function prevPhoto(inp) {
   r.onload=e=>{document.getElementById('qa-photo-img').src=e.target.result;document.getElementById('qa-photo-prev').style.display='block';};
   r.readAsDataURL(f);
 }
+function prevPhotoGallery(inp) {
+  const f=inp.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{document.getElementById('qa-photo-img').src=e.target.result;document.getElementById('qa-photo-prev').style.display='block';};
+  r.readAsDataURL(f);
+}
 function clearPhoto() {
   document.getElementById('qa-photo').value='';
+  document.getElementById('qa-photo-gallery').value='';
   document.getElementById('qa-photo-prev').style.display='none';
   document.getElementById('qa-photo-img').src='';
 }
@@ -801,7 +811,7 @@ async function confirmAdd() {
   showToast('⏳ Enregistrement...');
   try {
     await insertHydrant(toDb(h));
-    const photoFile=document.getElementById('qa-photo').files[0];
+    const photoFile=document.getElementById('qa-photo').files[0] || document.getElementById('qa-photo-gallery').files[0];
     if(photoFile) {
       showToast('📷 Upload photo...');
       const url=await uploadPhoto(photoFile,h.id);

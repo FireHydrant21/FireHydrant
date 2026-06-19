@@ -284,7 +284,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <button class="map-btn" onclick="locateMe()" title="Ma position">📍</button>
         <button class="map-btn" onclick="findNearest()" title="Plus proche">🚒</button>
         <button class="map-btn" id="btn-add" onclick="toggleAdd()" title="Ajouter">➕</button>
-        <button class="map-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre">▲</button>
+        <button class="map-btn" id="btn-follow" onclick="toggleFollow()" title="Suivre">
+          <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;stroke:none"><path d="M12 2L19 21 12 17 5 21z"/></svg>
+        </button>
       </div>
       <div id="add-hint">📍 Tapez sur la carte pour placer un point d'eau</div>
       <div id="legend">
@@ -400,7 +402,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 <div id="quick-add">
   <div class="qa-hdr">
     <button class="qa-close" onclick="cancelAdd()">✕</button>
-    <h2>Nouveau point d'eau</h2>
+    <h2 id="qa-title">Nouveau point d'eau</h2>
   </div>
   <div class="qa-body">
     <input type="hidden" id="qa-editing-id" value=""/>
@@ -459,7 +461,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <label class="photo-lbl" style="flex:1">🖼️ Galerie<input type="file" id="qa-photo-gallery" accept="image/*" style="display:none" onchange="prevPhotoGallery(this)"/></label>
     </div>
     <div class="divider"></div>
-    <button class="btn-p" onclick="confirmAdd()">✓ Enregistrer le point d'eau</button>
+    <button class="btn-p" id="qa-submit-btn" onclick="confirmAdd()">✓ Enregistrer le point d'eau</button>
     <button class="btn-s" onclick="cancelAdd()" style="margin-bottom:16px">Annuler</button>
   </div>
 </div>
@@ -800,30 +802,47 @@ async function confirmAdd() {
   const id=document.getElementById('qa-id').value.trim();
   const addr=document.getElementById('qa-addr').value.trim()||quickLat.toFixed(4)+', '+quickLng.toFixed(4);
   if(!id){showToast('Renseignez un identifiant');return;}
-  if(hydrants.find(h=>h.id===id)){showToast('Cet ID existe déjà');return;}
+  const editingId = document.getElementById('qa-editing-id').value;
+  const isEdit = !!editingId;
+  if(!isEdit && hydrants.find(h=>h.id===id)){showToast('Cet ID existe déjà');return;}
   const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
+  const existingNotes = isEdit ? (hydrants.find(h=>h.id===editingId)?.notes || '') : '';
   const notes=[anoms.length?'⚠️ Anomalies: '+anoms.join(', '):'',document.getElementById('qa-notes').value.trim()].filter(Boolean).join(' | ');
   const capVal=document.getElementById('qa-cap-val').value;
   const cap=capVal?(capVal+' '+document.getElementById('qa-cap-unit').value):'';
-  const h={id,type:quickType,addr,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,photo_url:''};
+  const photoExisting = document.getElementById('qa-photo-img').src && document.getElementById('qa-photo-prev').style.display==='block' ? document.getElementById('qa-photo-img').src : '';
+  const h={id,type:quickType,addr,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
   cancelAdd();
   if(addMode) toggleAdd();
   showToast('⏳ Enregistrement...');
   try {
-    await insertHydrant(toDb(h));
     const photoFile=document.getElementById('qa-photo').files[0] || document.getElementById('qa-photo-gallery').files[0];
-    if(photoFile) {
-      showToast('📷 Upload photo...');
-      const url=await uploadPhoto(photoFile,h.id);
-      if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
-    }
-    if(anoms.length) {
-      for(const a of anoms) {
-        await dbFetch('anomalies',{method:'POST',body:JSON.stringify({poteau_id:h.id,poteau_addr:addr,type_anomalie:a,signale_par:currentUser.nom,caserne_id:1,statut:'en_cours'})});
+    if(isEdit) {
+      await updateHydrant(editingId, toDb(h));
+      if(photoFile) {
+        showToast('📷 Upload photo...');
+        const url=await uploadPhoto(photoFile,h.id);
+        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
       }
+      const i = hydrants.findIndex(x=>x.id===editingId);
+      if(i>=0) hydrants[i] = h;
+      showToast('✓ '+h.id+' modifié !');
+    } else {
+      await insertHydrant(toDb(h));
+      if(photoFile) {
+        showToast('📷 Upload photo...');
+        const url=await uploadPhoto(photoFile,h.id);
+        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
+      }
+      if(anoms.length) {
+        for(const a of anoms) {
+          await dbFetch('anomalies',{method:'POST',body:JSON.stringify({poteau_id:h.id,poteau_addr:addr,type_anomalie:a,signale_par:currentUser.nom,caserne_id:1,statut:'en_cours'})});
+        }
+      }
+      hydrants.push(h);
+      showToast('✓ '+h.id+' ajouté !');
     }
-    hydrants.push(h); updateBadge(); renderMarkers(); renderList();
-    showToast('✓ '+h.id+' ajouté !');
+    updateBadge(); renderMarkers(); renderList();
     mapObj.setView([h.lat,h.lng],16);
     setTimeout(()=>showDetail(h.id),500);
   } catch(e){showToast('❌ Erreur: '+e.message);}
@@ -832,6 +851,9 @@ async function confirmAdd() {
 function cancelAdd() {
   document.getElementById('quick-add').classList.remove('show');
   quickLat=null; quickLng=null;
+  document.getElementById('qa-editing-id').value='';
+  document.getElementById('qa-title').textContent='Nouveau point d\'eau';
+  document.getElementById('qa-submit-btn').textContent='✓ Enregistrer le point d\'eau';
 }
 
 // ── DETAIL ────────────────────────────────────────────────────────────────────
@@ -878,18 +900,33 @@ function editH(id) {
   const h = hydrants.find(x=>x.id===id);
   if(!h) return;
   closeAll();
-  openAdd();
-  // Pre-fill form
-  setTimeout(()=>{
-    document.getElementById('qa-id').value = h.id;
-    document.getElementById('qa-addr').value = h.addr;
-    document.getElementById('qa-diam').value = h.diam;
-    document.getElementById('qa-pres').value = h.pres||'';
-    selType(h.type, document.getElementById('qt-'+h.type));
-    if(!h.ok) selEtat('hs'); else selEtat('ok');
-    document.getElementById('qa-notes').value = h.notes||'';
-    document.getElementById('qa-editing-id').value = h.id;
-  }, 300);
+  quickLat = h.lat; quickLng = h.lng;
+  document.getElementById('qa-coord').textContent = h.lat.toFixed(5)+'° N, '+h.lng.toFixed(5)+'° E';
+  document.getElementById('qa-id').value = h.id;
+  document.getElementById('qa-addr').value = h.addr;
+  document.getElementById('qa-diam').value = h.diam;
+  document.getElementById('qa-pres').value = h.pres||'';
+  document.getElementById('qa-notes').value = '';
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('qt-'+h.type).classList.add('sel');
+  quickType = h.type;
+  document.getElementById('qa-cap-wrap').style.display = h.type==='reservoir'?'block':'none';
+  if(h.capacite) {
+    const parts = h.capacite.split(' ');
+    document.getElementById('qa-cap-val').value = parts[0]||'';
+    document.getElementById('qa-cap-unit').value = parts[1]||'m3';
+  }
+  selEtat(h.ok?'ok':'hs');
+  document.querySelectorAll('#qa-anoms .anom-chip').forEach(c=>c.classList.remove('sel'));
+  clearPhoto();
+  if(h.photo_url) {
+    document.getElementById('qa-photo-img').src = h.photo_url;
+    document.getElementById('qa-photo-prev').style.display = 'block';
+  }
+  document.getElementById('qa-editing-id').value = h.id;
+  document.getElementById('qa-title').textContent = 'Modifier le point d\'eau';
+  document.getElementById('qa-submit-btn').textContent = '✓ Enregistrer les modifications';
+  document.getElementById('quick-add').classList.add('show');
 }
 
 async function delH(id) {

@@ -153,6 +153,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .h-status.ok{color:var(--green)}
 .h-status.hs{color:var(--red)}
 .h-dist{font-size:12px;color:var(--blue);font-weight:600}
+.commune-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--gray-100);font-size:13px;font-weight:700;color:var(--gray-800);text-transform:uppercase;letter-spacing:0.3px;position:sticky;top:0;z-index:5}
+.commune-count{background:var(--red);color:white;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700}
 .empty{text-align:center;padding:48px 24px;color:var(--gray-400)}
 .empty .ei{font-size:48px;margin-bottom:12px}
 .pg-title{font-size:22px;font-weight:800;color:var(--gray-900);padding:18px 14px 8px;letter-spacing:-.5px}
@@ -417,6 +419,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <input class="inp" id="qa-id" type="text" placeholder="Ex: PI-042"/>
     <div class="qa-sec">Adresse / Lieu</div>
     <input class="inp" id="qa-addr" type="text" placeholder="Adresse détectée automatiquement"/>
+    <div class="qa-sec">Commune</div>
+    <input class="inp" id="qa-commune" type="text" placeholder="Détectée automatiquement"/>
     <div class="qa-sec">Informations</div>
     <div class="row2">
       <div>
@@ -542,10 +546,10 @@ async function deleteHydrant(id) { return dbFetch('poteaux?identifiant=eq.'+enco
 async function getUsers() { return dbFetch('utilisateurs?select=*&order=prenom'); }
 
 function toH(d) {
-  return {id:d.identifiant,type:d.type,addr:d.adresse,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,capacite:d.capacite,photo_url:d.photo_url};
+  return {id:d.identifiant,type:d.type,addr:d.adresse,commune:d.commune,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,capacite:d.capacite,photo_url:d.photo_url};
 }
 function toDb(h) {
-  return {identifiant:h.id,type:h.type,adresse:h.addr,diametre:h.diam,pression:h.pres||'',etat:h.ok,notes:h.notes||'',latitude:h.lat,longitude:h.lng,date_ajout:h.added||new Date().toLocaleDateString('fr-FR'),capacite:h.capacite||'',photo_url:h.photo_url||''};
+  return {identifiant:h.id,type:h.type,adresse:h.addr,commune:h.commune||'',diametre:h.diam,pression:h.pres||'',etat:h.ok,notes:h.notes||'',latitude:h.lat,longitude:h.lng,date_ajout:h.added||new Date().toLocaleDateString('fr-FR'),capacite:h.capacite||'',photo_url:h.photo_url||''};
 }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
@@ -730,6 +734,7 @@ function onMapClick(e) {
   document.getElementById('qa-coord').textContent=quickLat.toFixed(5)+'° N, '+quickLng.toFixed(5)+'° E';
   document.getElementById('qa-id').value=genId('poteau');
   document.getElementById('qa-addr').value='';
+  document.getElementById('qa-commune').value='';
   document.getElementById('qa-diam').value='100 mm';
   document.getElementById('qa-pres').value='';
   document.getElementById('qa-notes').value='';
@@ -744,8 +749,10 @@ function onMapClick(e) {
   // Reverse geocode
   fetch(`https://nominatim.openstreetmap.org/reverse?lat=${quickLat}&lon=${quickLng}&format=json&accept-language=fr`)
     .then(r=>r.json()).then(d=>{
-      const p=[d.address.road,d.address.house_number,d.address.city||d.address.town||d.address.village].filter(Boolean);
+      const p=[d.address.road,d.address.house_number].filter(Boolean);
       document.getElementById('qa-addr').value=p.join(' ');
+      const commune = d.address.city||d.address.town||d.address.village||d.address.municipality||'';
+      document.getElementById('qa-commune').value=commune;
     }).catch(()=>{});
 }
 
@@ -811,7 +818,8 @@ async function confirmAdd() {
   const capVal=document.getElementById('qa-cap-val').value;
   const cap=capVal?(capVal+' '+document.getElementById('qa-cap-unit').value):'';
   const photoExisting = document.getElementById('qa-photo-img').src && document.getElementById('qa-photo-prev').style.display==='block' ? document.getElementById('qa-photo-img').src : '';
-  const h={id,type:quickType,addr,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
+  const commune=document.getElementById('qa-commune').value.trim()||'Non renseignée';
+  const h={id,type:quickType,addr,commune,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
   cancelAdd();
   if(addMode) toggleAdd();
   showToast('⏳ Enregistrement...');
@@ -904,6 +912,7 @@ function editH(id) {
   document.getElementById('qa-coord').textContent = h.lat.toFixed(5)+'° N, '+h.lng.toFixed(5)+'° E';
   document.getElementById('qa-id').value = h.id;
   document.getElementById('qa-addr').value = h.addr;
+  document.getElementById('qa-commune').value = h.commune||'';
   document.getElementById('qa-diam').value = h.diam;
   document.getElementById('qa-pres').value = h.pres||'';
   document.getElementById('qa-notes').value = '';
@@ -998,18 +1007,32 @@ function renderList() {
     if(activeFilter==='hs') return !h.ok;
     if(['poteau','borne','reservoir'].includes(activeFilter)) return h.type===activeFilter;
     return true;
-  }).filter(h=>!q||h.id.toLowerCase().includes(q)||h.addr.toLowerCase().includes(q));
-  if(myLat){list.forEach(h=>h._d=(h.lat&&h.lng)?haversine(myLat,myLng,h.lat,h.lng):Infinity);list.sort((a,b)=>a._d-b._d);}
+  }).filter(h=>!q||h.id.toLowerCase().includes(q)||h.addr.toLowerCase().includes(q)||(h.commune||'').toLowerCase().includes(q));
+  if(myLat){list.forEach(h=>h._d=(h.lat&&h.lng)?haversine(myLat,myLng,h.lat,h.lng):Infinity);}
   const c=document.getElementById('h-list');
   if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>Aucun résultat</p></div>`;return;}
-  c.innerHTML=list.map(h=>{
-    const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
-    const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
-    return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}'),300)">
-      <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
-      <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
-      <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>
-    </div>`;
+  // Group by commune
+  const groups={};
+  list.forEach(h=>{
+    const com=h.commune||'Non renseignée';
+    if(!groups[com]) groups[com]=[];
+    groups[com].push(h);
+  });
+  // Sort communes alphabetically, sort hydrants within each by distance if available
+  const communes=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'fr'));
+  c.innerHTML=communes.map(com=>{
+    const items=groups[com];
+    if(myLat) items.sort((a,b)=>a._d-b._d);
+    const rows=items.map(h=>{
+      const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
+      const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
+      return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}'),300)">
+        <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
+        <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
+        <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="commune-header">📍 ${com} <span class="commune-count">${items.length}</span></div>${rows}`;
   }).join('');
 }
 

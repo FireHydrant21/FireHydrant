@@ -841,6 +841,16 @@ async function confirmAdd() {
         const url=await uploadPhoto(photoFile,h.id);
         if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
       }
+      if(anoms.length) {
+        showToast('⏳ Enregistrement anomalies...');
+        for(const a of anoms) {
+          try {
+            await dbFetch('anomalies',{method:'POST',body:JSON.stringify({poteau_id:h.id,poteau_addr:addr,type_anomalie:a,signale_par:(currentUser&&currentUser.nom)||'Inconnu',caserne_id:1,statut:'en_cours'})});
+          } catch(errAnom) {
+            showToast('⚠️ Anomalie non enregistrée: '+errAnom.message);
+          }
+        }
+      }
       const i = hydrants.findIndex(x=>x.id===editingId);
       if(i>=0) hydrants[i] = h;
       showToast('✓ '+h.id+' modifié !');
@@ -852,8 +862,13 @@ async function confirmAdd() {
         if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
       }
       if(anoms.length) {
+        showToast('⏳ Enregistrement anomalies...');
         for(const a of anoms) {
-          await dbFetch('anomalies',{method:'POST',body:JSON.stringify({poteau_id:h.id,poteau_addr:addr,type_anomalie:a,signale_par:currentUser.nom,caserne_id:1,statut:'en_cours'})});
+          try {
+            await dbFetch('anomalies',{method:'POST',body:JSON.stringify({poteau_id:h.id,poteau_addr:addr,type_anomalie:a,signale_par:(currentUser&&currentUser.nom)||'Inconnu',caserne_id:1,statut:'en_cours'})});
+          } catch(errAnom) {
+            showToast('⚠️ Anomalie non enregistrée: '+errAnom.message);
+          }
         }
       }
       hydrants.push(h);

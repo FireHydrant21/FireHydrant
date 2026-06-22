@@ -542,15 +542,11 @@ async function dbFetch(path, opts={}) {
 }
 async function getHydrants() { return dbFetch('poteaux?select=*&order=identifiant'); }
 async function insertHydrant(h) { return dbFetch('poteaux',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(h)}); }
-async function updateHydrant(id,h,commune) { 
-  let q='poteaux?identifiant=eq.'+encodeURIComponent(id);
-  if(commune) q+='&commune=eq.'+encodeURIComponent(commune);
-  return dbFetch(q,{method:'PATCH',body:JSON.stringify(h)}); 
+async function updateHydrant(id,h) { 
+  return dbFetch('poteaux?identifiant=eq.'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(h)}); 
 }
-async function deleteHydrant(id,commune) { 
-  let q='poteaux?identifiant=eq.'+encodeURIComponent(id);
-  if(commune) q+='&commune=eq.'+encodeURIComponent(commune);
-  return dbFetch(q,{method:'DELETE'}); 
+async function deleteHydrant(id) { 
+  return dbFetch('poteaux?identifiant=eq.'+encodeURIComponent(id),{method:'DELETE'}); 
 }
 async function getUsers() { return dbFetch('utilisateurs?select=*&order=prenom'); }
 
@@ -656,7 +652,7 @@ function renderMarkers() {
   hydrants.forEach(h=>{
     if(!h.lat||!h.lng) return;
     const m=L.marker([h.lat,h.lng],{icon:makeIcon(h,h.id===nearestId)});
-    m.on('click',()=>{if(!addMode) showDetail(h.id,h.commune);});
+    m.on('click',()=>{if(!addMode) showDetail(h.id);});
     m.addTo(mapObj); markers[h.id+'|'+(h.commune||'')]=m;
   });
 }
@@ -822,9 +818,8 @@ async function confirmAdd() {
   const commune=document.getElementById('qa-commune').value.trim()||'Non renseignée';
   if(!id){showToast('Renseignez un identifiant');return;}
   const editingId = document.getElementById('qa-editing-id').value;
-  const editingCommune = document.getElementById('qa-editing-commune').value || null;
   const isEdit = !!editingId;
-  if(!isEdit && hydrants.find(h=>h.id===id && h.commune===commune)){showToast('Cet identifiant existe déjà pour '+commune);return;}
+  if(!isEdit && hydrants.find(h=>h.id===id)){showToast('Cet identifiant existe déjà — choisissez-en un autre');return;}
   const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
   const notes=[anoms.length?'⚠️ Anomalies: '+anoms.join(', '):'',document.getElementById('qa-notes').value.trim()].filter(Boolean).join(' | ');
   const capVal=document.getElementById('qa-cap-val').value;
@@ -837,13 +832,13 @@ async function confirmAdd() {
   try {
     const photoFile=document.getElementById('qa-photo').files[0] || document.getElementById('qa-photo-gallery').files[0];
     if(isEdit) {
-      await updateHydrant(editingId, toDb(h), editingCommune);
+      await updateHydrant(editingId, toDb(h));
       if(photoFile) {
         showToast('📷 Upload photo...');
         const url=await uploadPhoto(photoFile,h.id);
-        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url},h.commune);}
+        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
       }
-      const i = hydrants.findIndex(x=>x.id===editingId && x.commune===editingCommune);
+      const i = hydrants.findIndex(x=>x.id===editingId);
       if(i>=0) hydrants[i] = h;
       showToast('✓ '+h.id+' modifié !');
     } else {
@@ -851,7 +846,7 @@ async function confirmAdd() {
       if(photoFile) {
         showToast('📷 Upload photo...');
         const url=await uploadPhoto(photoFile,h.id);
-        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url},h.commune);}
+        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
       }
       if(anoms.length) {
         for(const a of anoms) {
@@ -863,7 +858,7 @@ async function confirmAdd() {
     }
     updateBadge(); renderMarkers(); renderList();
     mapObj.setView([h.lat,h.lng],16);
-    setTimeout(()=>showDetail(h.id,h.commune),500);
+    setTimeout(()=>showDetail(h.id),500);
   } catch(e){showToast('❌ Erreur: '+e.message);}
 }
 
@@ -871,14 +866,13 @@ function cancelAdd() {
   document.getElementById('quick-add').classList.remove('show');
   quickLat=null; quickLng=null;
   document.getElementById('qa-editing-id').value='';
-  document.getElementById('qa-editing-commune').value='';
   document.getElementById('qa-title').textContent='Nouveau point d\'eau';
   document.getElementById('qa-submit-btn').textContent='✓ Enregistrer le point d\'eau';
 }
 
 // ── DETAIL ────────────────────────────────────────────────────────────────────
-function showDetail(id,commune) {
-  const h=hydrants.find(x=>x.id===id && (commune===undefined || x.commune===commune)); if(!h) return;
+function showDetail(id) {
+  const h=hydrants.find(x=>x.id===id); if(!h) return;
   const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
   const crowDist=myLat&&h.lat?fmtDist(haversine(myLat,myLng,h.lat,h.lng)):null;
   document.getElementById('detail-body').innerHTML=`
@@ -897,8 +891,8 @@ function showDetail(id,commune) {
     </div>
     ${h.notes?`<div class="notes-box">📝 ${h.notes}</div>`:''}
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
-    <button class="btn-s" onclick="editH('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}')">✏️ Modifier</button>
-    <button class="btn-d" onclick="delH('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}')">🗑 Supprimer</button>
+    <button class="btn-s" onclick="editH('${h.id}')">✏️ Modifier</button>
+    <button class="btn-d" onclick="delH('${h.id}')">🗑 Supprimer</button>
   `;
   document.getElementById('overlay').classList.add('show');
   document.getElementById('detail-sheet').classList.add('show');
@@ -916,8 +910,8 @@ function closeDetail() {
   document.getElementById('overlay').classList.remove('show');
 }
 
-function editH(id,commune) {
-  const h = hydrants.find(x=>x.id===id && (commune===undefined || x.commune===commune));
+function editH(id) {
+  const h = hydrants.find(x=>x.id===id);
   if(!h) return;
   closeAll();
   quickLat = h.lat; quickLng = h.lng;
@@ -951,11 +945,11 @@ function editH(id,commune) {
   document.getElementById('quick-add').classList.add('show');
 }
 
-async function delH(id,commune) {
+async function delH(id) {
   if(!confirm('Supprimer ce point d\'eau ?')) return;
   try {
-    await deleteHydrant(id,commune);
-    hydrants=hydrants.filter(h=>!(h.id===id && (commune===undefined || h.commune===commune)));
+    await deleteHydrant(id);
+    hydrants=hydrants.filter(h=>h.id!==id);
     updateBadge(); renderMarkers(); renderList(); closeAll();
     showToast('✓ Supprimé');
   } catch(e){showToast('❌ Erreur');}
@@ -1039,7 +1033,7 @@ function renderList() {
     const rows=items.map(h=>{
       const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
       const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
-      return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}'),300)">
+      return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}'),300)">
         <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
         <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
         <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>
@@ -1072,7 +1066,7 @@ async function loadAdminData() {
         <div class="an-meta">${a.signale_par||''} • ${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
         ${a.statut==='en_cours'?`<button onclick="resolveAnom(${a.id})" style="margin-top:6px;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px">✅ Résolu</button>`:''}
       </div>`).join('');
-  } catch(e){}
+  } catch(e){document.getElementById('admin-anomalies').innerHTML='<div style="color:var(--red);font-size:12px">Erreur: '+e.message+'</div>';}
 }
 
 async function resolveAnom(id) {

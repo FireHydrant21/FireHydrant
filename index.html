@@ -769,6 +769,9 @@ function selType(t,el) {
   document.getElementById('qa-id').value=genId(t,document.getElementById('qa-commune').value.trim());
   document.getElementById('qa-cap-wrap').style.display=t==='reservoir'?'block':'none';
 }
+function togAnom(el) {
+  el.classList.toggle('sel');
+}
 function selEtat(e) {
   quickEtat=e;
   document.getElementById('qa-etat-ok').className='radio-opt'+(e==='ok'?' ok':'');

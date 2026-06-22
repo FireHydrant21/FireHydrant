@@ -907,7 +907,7 @@ function showDetail(id) {
       <div class="field"><label>État</label><span class="${h.ok?'badge-ok':'badge-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
       ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
     </div>
-    ${h.notes?`<div class="notes-box">📝 ${h.notes}</div>`:''}
+    ${h.notes?`<div class="notes-box" id="notes-box-${h.id}">📝 ${h.notes}<button onclick="clearNotes('${h.id}')" style="display:block;margin-top:6px;background:transparent;border:none;color:#92400E;text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:''}
     <div id="anom-list-${h.id}" style="margin-bottom:14px"></div>
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
     <button class="btn-s" onclick="editH('${h.id}')">✏️ Modifier</button>
@@ -937,6 +937,18 @@ async function loadHydrantAnomalies(hid) {
         <button onclick="delAnomFromDetail(${a.id},'${hid}')" style="background:transparent;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
       </div>`).join('');
   } catch(e) { box.innerHTML=''; }
+}
+
+async function clearNotes(hid) {
+  if(!confirm('Effacer cette note ?')) return;
+  try {
+    await updateHydrant(hid,{notes:''});
+    const i = hydrants.findIndex(h=>h.id===hid);
+    if(i>=0) hydrants[i].notes = '';
+    showToast('✓ Note effacée');
+    const box = document.getElementById('notes-box-'+hid);
+    if(box) box.remove();
+  } catch(e){showToast('❌ Erreur');}
 }
 
 async function delAnomFromDetail(id,hid) {

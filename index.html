@@ -890,6 +890,7 @@ function showDetail(id) {
       ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
     </div>
     ${h.notes?`<div class="notes-box">📝 ${h.notes}</div>`:''}
+    <div id="anom-list-${h.id}" style="margin-bottom:14px"></div>
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
     <button class="btn-s" onclick="editH('${h.id}')">✏️ Modifier</button>
     <button class="btn-d" onclick="delH('${h.id}')">🗑 Supprimer</button>
@@ -903,6 +904,30 @@ function showDetail(id) {
       if(box) box.innerHTML=rd?`🚗 À <strong>${fmtDist(rd)}</strong> par la route`:`⚠️ Distance routière indisponible`;
     });
   }
+  loadHydrantAnomalies(h.id);
+}
+
+async function loadHydrantAnomalies(hid) {
+  const box = document.getElementById('anom-list-'+hid);
+  if(!box) return;
+  try {
+    const anoms = await dbFetch('anomalies?poteau_id=eq.'+encodeURIComponent(hid)+'&statut=eq.en_cours&select=*&order=id.desc');
+    if(!anoms || !anoms.length) { box.innerHTML=''; return; }
+    box.innerHTML = '<div style="font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;margin-bottom:6px">⚠️ Anomalies en cours</div>' + anoms.map(a=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--orange-light);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <span style="font-size:13px;color:#92400E">${a.type_anomalie}</span>
+        <button onclick="delAnomFromDetail(${a.id},'${hid}')" style="background:transparent;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
+      </div>`).join('');
+  } catch(e) { box.innerHTML=''; }
+}
+
+async function delAnomFromDetail(id,hid) {
+  if(!confirm('Supprimer cette anomalie ?')) return;
+  try {
+    await dbFetch('anomalies?id=eq.'+id,{method:'DELETE'});
+    showToast('✓ Anomalie supprimée');
+    loadHydrantAnomalies(hid);
+  } catch(e){showToast('❌ Erreur');}
 }
 
 function closeDetail() {
@@ -1055,23 +1080,42 @@ async function loadAdminData() {
         <div class="u-info"><div class="u-name">${u.prenom?u.prenom+' ':''  }${u.nom}</div><div class="u-role">${re[u.role]||''} ${cap(u.role)}</div></div>
         ${currentUser.role==='admin'?`<button onclick="delUser(${u.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">🗑</button>`:''}
       </div>`).join('');
-  } catch(e){document.getElementById('admin-users').innerHTML='Erreur de chargement';}
+  } catch(e){document.getElementById('admin-users').innerHTML='Erreur: '+e.message;}
+  await loadAnomalies();
+}
+
+async function loadAnomalies() {
+  const box = document.getElementById('admin-anomalies');
+  box.innerHTML = 'Chargement...';
   try {
-    const anoms=await dbFetch('anomalies?select=*&order=created_at.desc&limit=20');
-    if(!anoms||!anoms.length){document.getElementById('admin-anomalies').innerHTML='<div style="color:var(--gray-400);font-size:13px">Aucune anomalie</div>';return;}
-    document.getElementById('admin-anomalies').innerHTML=anoms.map(a=>`
+    const anoms = await dbFetch('anomalies?select=*&order=id.desc');
+    if(!anoms || !anoms.length) { box.innerHTML = '<div style="color:var(--gray-400);font-size:13px">Aucune anomalie signalée</div>'; return; }
+    box.innerHTML = anoms.map(a=>`
       <div class="an-row">
         <div class="an-top"><div class="an-name">${a.poteau_id||'—'}</div><div class="st-chip ${a.statut==='en_cours'?'st-ec':'st-rs'}">${a.statut==='en_cours'?'⚠️ En cours':'✅ Résolu'}</div></div>
         <div class="an-meta">${a.poteau_addr||''} • ${a.type_anomalie||''}</div>
-        <div class="an-meta">${a.signale_par||''} • ${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
-        ${a.statut==='en_cours'?`<button onclick="resolveAnom(${a.id})" style="margin-top:6px;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px">✅ Résolu</button>`:''}
+        <div class="an-meta">${a.signale_par||''} • ${a.created_at?new Date(a.created_at).toLocaleDateString('fr-FR'):''}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          ${a.statut==='en_cours'?`<button onclick="resolveAnom(${a.id})" style="flex:1;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">✅ Résolu</button>`:''}
+          <button onclick="delAnom(${a.id})" style="flex:1;background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">🗑 Supprimer</button>
+        </div>
       </div>`).join('');
-  } catch(e){document.getElementById('admin-anomalies').innerHTML='<div style="color:var(--red);font-size:12px">Erreur: '+e.message+'</div>';}
+  } catch(e) {
+    box.innerHTML = '<div style="color:var(--red);font-size:12px">Erreur de chargement: '+e.message+'</div>';
+  }
 }
 
 async function resolveAnom(id) {
   await dbFetch('anomalies?id=eq.'+id,{method:'PATCH',body:JSON.stringify({statut:'resolu'})});
-  loadAdminData(); showToast('✅ Anomalie résolue');
+  loadAnomalies(); showToast('✅ Anomalie résolue');
+}
+
+async function delAnom(id) {
+  if(!confirm('Supprimer cette anomalie ?')) return;
+  try {
+    await dbFetch('anomalies?id=eq.'+id,{method:'DELETE'});
+    loadAnomalies(); showToast('✓ Anomalie supprimée');
+  } catch(e){showToast('❌ Erreur de suppression');}
 }
 async function delUser(id) {
   if(!confirm('Supprimer cet utilisateur ?')) return;

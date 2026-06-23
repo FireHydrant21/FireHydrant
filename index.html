@@ -542,11 +542,15 @@ async function dbFetch(path, opts={}) {
 }
 async function getHydrants() { return dbFetch('poteaux?select=*&order=identifiant'); }
 async function insertHydrant(h) { return dbFetch('poteaux',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(h)}); }
-async function updateHydrant(id,h) { 
-  return dbFetch('poteaux?identifiant=eq.'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(h)}); 
+async function updateHydrant(id,h,commune) { 
+  let q='poteaux?identifiant=eq.'+encodeURIComponent(id);
+  if(commune!==undefined && commune!==null) q+='&commune=eq.'+encodeURIComponent(commune);
+  return dbFetch(q,{method:'PATCH',body:JSON.stringify(h)}); 
 }
-async function deleteHydrant(id) { 
-  return dbFetch('poteaux?identifiant=eq.'+encodeURIComponent(id),{method:'DELETE'}); 
+async function deleteHydrant(id,commune) { 
+  let q='poteaux?identifiant=eq.'+encodeURIComponent(id);
+  if(commune!==undefined && commune!==null) q+='&commune=eq.'+encodeURIComponent(commune);
+  return dbFetch(q,{method:'DELETE'}); 
 }
 async function getUsers() { return dbFetch('utilisateurs?select=*&order=prenom'); }
 
@@ -652,7 +656,7 @@ function renderMarkers() {
   hydrants.forEach(h=>{
     if(!h.lat||!h.lng) return;
     const m=L.marker([h.lat,h.lng],{icon:makeIcon(h,h.id===nearestId)});
-    m.on('click',()=>{if(!addMode) showDetail(h.id);});
+    m.on('click',()=>{if(!addMode) showDetail(h.id,h.commune);});
     m.addTo(mapObj); markers[h.id+'|'+(h.commune||'')]=m;
   });
 }
@@ -821,8 +825,9 @@ async function confirmAdd() {
   const commune=document.getElementById('qa-commune').value.trim()||'Non renseignée';
   if(!id){showToast('Renseignez un identifiant');return;}
   const editingId = document.getElementById('qa-editing-id').value;
+  const editingCommune = document.getElementById('qa-editing-commune').value;
   const isEdit = !!editingId;
-  if(!isEdit && hydrants.find(h=>h.id===id)){showToast('Cet identifiant existe déjà — choisissez-en un autre');return;}
+  if(!isEdit && hydrants.find(h=>h.id===id && h.commune===commune)){showToast('Cet identifiant existe déjà pour '+commune+' — choisissez-en un autre');return;}
   const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
   const notes=[anoms.length?'⚠️ Anomalies: '+anoms.join(', '):'',document.getElementById('qa-notes').value.trim()].filter(Boolean).join(' | ');
   const capVal=document.getElementById('qa-cap-val').value;
@@ -835,11 +840,11 @@ async function confirmAdd() {
   try {
     const photoFile=document.getElementById('qa-photo').files[0] || document.getElementById('qa-photo-gallery').files[0];
     if(isEdit) {
-      await updateHydrant(editingId, toDb(h));
+      await updateHydrant(editingId, toDb(h), editingCommune);
       if(photoFile) {
         showToast('📷 Upload photo...');
         const url=await uploadPhoto(photoFile,h.id);
-        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
+        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url},h.commune);}
       }
       if(anoms.length) {
         showToast('⏳ Enregistrement anomalies...');
@@ -851,7 +856,7 @@ async function confirmAdd() {
           }
         }
       }
-      const i = hydrants.findIndex(x=>x.id===editingId);
+      const i = hydrants.findIndex(x=>x.id===editingId && x.commune===editingCommune);
       if(i>=0) hydrants[i] = h;
       showToast('✓ '+h.id+' modifié !');
     } else {
@@ -859,7 +864,7 @@ async function confirmAdd() {
       if(photoFile) {
         showToast('📷 Upload photo...');
         const url=await uploadPhoto(photoFile,h.id);
-        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url});}
+        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url},h.commune);}
       }
       if(anoms.length) {
         showToast('⏳ Enregistrement anomalies...');
@@ -876,7 +881,7 @@ async function confirmAdd() {
     }
     updateBadge(); renderMarkers(); renderList();
     mapObj.setView([h.lat,h.lng],16);
-    setTimeout(()=>showDetail(h.id),500);
+    setTimeout(()=>showDetail(h.id,h.commune),500);
   } catch(e){showToast('❌ Erreur: '+e.message);}
 }
 
@@ -889,10 +894,11 @@ function cancelAdd() {
 }
 
 // ── DETAIL ────────────────────────────────────────────────────────────────────
-function showDetail(id) {
-  const h=hydrants.find(x=>x.id===id); if(!h) return;
+function showDetail(id,commune) {
+  const h=hydrants.find(x=>x.id===id && (commune===undefined||x.commune===commune)); if(!h) return;
   const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
   const crowDist=myLat&&h.lat?fmtDist(haversine(myLat,myLng,h.lat,h.lng)):null;
+  const comSafe=(h.commune||'').replace(/'/g,"\\'");
   document.getElementById('detail-body').innerHTML=`
     <div class="sheet-hdr">
       <div class="sheet-icon" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${e}</div>
@@ -907,11 +913,11 @@ function showDetail(id) {
       <div class="field"><label>État</label><span class="${h.ok?'badge-ok':'badge-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
       ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
     </div>
-    ${h.notes?`<div class="notes-box" id="notes-box-${h.id}">📝 ${h.notes}<button onclick="clearNotes('${h.id}')" style="display:block;margin-top:6px;background:transparent;border:none;color:#92400E;text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:''}
+    ${h.notes?`<div class="notes-box" id="notes-box-${h.id}">📝 ${h.notes}<button onclick="clearNotes('${h.id}','${comSafe}')" style="display:block;margin-top:6px;background:transparent;border:none;color:#92400E;text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:''}
     <div id="anom-list-${h.id}" style="margin-bottom:14px"></div>
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
-    <button class="btn-s" onclick="editH('${h.id}')">✏️ Modifier</button>
-    <button class="btn-d" onclick="delH('${h.id}')">🗑 Supprimer</button>
+    <button class="btn-s" onclick="editH('${h.id}','${comSafe}')">✏️ Modifier</button>
+    <button class="btn-d" onclick="delH('${h.id}','${comSafe}')">🗑 Supprimer</button>
   `;
   document.getElementById('overlay').classList.add('show');
   document.getElementById('detail-sheet').classList.add('show');
@@ -939,11 +945,11 @@ async function loadHydrantAnomalies(hid) {
   } catch(e) { box.innerHTML=''; }
 }
 
-async function clearNotes(hid) {
+async function clearNotes(hid,commune) {
   if(!confirm('Effacer cette note ?')) return;
   try {
-    await updateHydrant(hid,{notes:''});
-    const i = hydrants.findIndex(h=>h.id===hid);
+    await updateHydrant(hid,{notes:''},commune);
+    const i = hydrants.findIndex(h=>h.id===hid && (commune===undefined||commune===''||h.commune===commune));
     if(i>=0) hydrants[i].notes = '';
     showToast('✓ Note effacée');
     const box = document.getElementById('notes-box-'+hid);
@@ -965,8 +971,8 @@ function closeDetail() {
   document.getElementById('overlay').classList.remove('show');
 }
 
-function editH(id) {
-  const h = hydrants.find(x=>x.id===id);
+function editH(id,commune) {
+  const h = hydrants.find(x=>x.id===id && (commune===undefined||commune===''||x.commune===commune));
   if(!h) return;
   closeAll();
   quickLat = h.lat; quickLng = h.lng;
@@ -1000,11 +1006,11 @@ function editH(id) {
   document.getElementById('quick-add').classList.add('show');
 }
 
-async function delH(id) {
+async function delH(id,commune) {
   if(!confirm('Supprimer ce point d\'eau ?')) return;
   try {
-    await deleteHydrant(id);
-    hydrants=hydrants.filter(h=>h.id!==id);
+    await deleteHydrant(id,commune);
+    hydrants=hydrants.filter(h=>!(h.id===id && (commune===undefined||commune===''||h.commune===commune)));
     updateBadge(); renderMarkers(); renderList(); closeAll();
     showToast('✓ Supprimé');
   } catch(e){showToast('❌ Erreur');}
@@ -1088,7 +1094,7 @@ function renderList() {
     const rows=items.map(h=>{
       const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
       const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
-      return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}'),300)">
+      return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}'),300)">
         <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
         <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
         <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>

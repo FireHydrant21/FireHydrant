@@ -1,4 +1,4 @@
-<!-- FireHydrant v4.0 - 2026-06-17 -->
+<!-- FireHydrant v5.0 - 2026-06-23 - communes dropdown + HS gestion + clic-localise -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -341,6 +341,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button class="btn-p" style="margin-top:12px" onclick="showSub('sub-add-user')">➕ Ajouter un utilisateur</button>
         </div>
         <div class="admin-card">
+          <h3>🔴 Points d'eau hors service</h3>
+          <div id="admin-hs">Chargement...</div>
+        </div>
+        <div class="admin-card">
           <h3>⚠️ Anomalies signalées</h3>
           <div id="admin-anomalies">Chargement...</div>
         </div>
@@ -421,7 +425,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <div class="qa-sec">Adresse / Lieu</div>
     <input class="inp" id="qa-addr" type="text" placeholder="Adresse détectée automatiquement"/>
     <div class="qa-sec">Commune</div>
-    <input class="inp" id="qa-commune" type="text" placeholder="Détectée automatiquement" onchange="if(!document.getElementById('qa-editing-id').value) document.getElementById('qa-id').value=genId(quickType,this.value.trim())"/>
+    <div style="position:relative">
+      <input class="inp" id="qa-commune" type="text" placeholder="Commencez à taper..." autocomplete="off" oninput="searchCommune(this.value)" onblur="setTimeout(hideCommuneSuggest,200)"/>
+      <div id="commune-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:50;max-height:220px;overflow-y:auto;margin-top:2px"></div>
+    </div>
     <div class="qa-sec">Informations</div>
     <div class="row2">
       <div>
@@ -740,10 +747,15 @@ function toggleAdd() {
 function onMapClick(e) {
   if(!addMode) return;
   quickLat=e.latlng.lat; quickLng=e.latlng.lng; quickType=null; quickEtat='ok';
+  document.getElementById('qa-editing-id').value='';
+  document.getElementById('qa-editing-commune').value='';
+  document.getElementById('qa-title').textContent='Nouveau point d\'eau';
+  document.getElementById('qa-submit-btn').textContent='✓ Enregistrer le point d\'eau';
   document.getElementById('qa-coord').textContent=quickLat.toFixed(5)+'° N, '+quickLng.toFixed(5)+'° E';
   document.getElementById('qa-id').value=genId('poteau');
   document.getElementById('qa-addr').value='';
   document.getElementById('qa-commune').value='';
+  hideCommuneSuggest();
   document.getElementById('qa-diam').value='100 mm';
   document.getElementById('qa-pres').value='';
   document.getElementById('qa-notes').value='';
@@ -811,11 +823,56 @@ async function uploadPhoto(file,hid) {
   return null;
 }
 
+function normalizeCommune(c) {
+  return (c||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+}
+
 function genId(type,commune) {
   const p=type==='poteau'?'PI':type==='borne'?'BI':'RI';
-  const scoped = commune ? hydrants.filter(h=>h.type===type && h.commune===commune) : hydrants.filter(h=>h.type===type);
+  const nc=normalizeCommune(commune);
+  const scoped = nc ? hydrants.filter(h=>h.type===type && normalizeCommune(h.commune)===nc) : hydrants.filter(h=>h.type===type);
   const nums=scoped.map(h=>parseInt((h.id.split('-')[1])||0));
   return p+'-'+String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
+}
+
+let communeSearchTimer=null;
+function searchCommune(q) {
+  q=q.trim();
+  if(!document.getElementById('qa-editing-id').value && quickType) {
+    document.getElementById('qa-id').value=genId(quickType,q);
+  }
+  if(communeSearchTimer) clearTimeout(communeSearchTimer);
+  if(q.length<2){ hideCommuneSuggest(); return; }
+  communeSearchTimer=setTimeout(()=>{
+    fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(q)}&fields=nom,codesPostaux,departement&boost=population&limit=8`)
+      .then(r=>r.json())
+      .then(list=>{
+        const box=document.getElementById('commune-suggest');
+        if(!list||!list.length){ hideCommuneSuggest(); return; }
+        box.innerHTML=list.map(c=>{
+          const cp=(c.codesPostaux&&c.codesPostaux[0])||'';
+          const dep=c.departement&&c.departement.code?c.departement.code:'';
+          return `<div onclick="pickCommune('${c.nom.replace(/'/g,"\\'")}')" ontouchstart="this.style.background='var(--gray-100)'" style="padding:11px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;font-size:14px">
+            <span style="font-weight:600">${c.nom}</span>
+            <span style="color:var(--gray-400);font-size:12px"> ${cp?'· '+cp:''}${dep?' ('+dep+')':''}</span>
+          </div>`;
+        }).join('');
+        box.style.display='block';
+      }).catch(()=>hideCommuneSuggest());
+  },250);
+}
+
+function pickCommune(nom) {
+  document.getElementById('qa-commune').value=nom;
+  hideCommuneSuggest();
+  if(!document.getElementById('qa-editing-id').value && quickType) {
+    document.getElementById('qa-id').value=genId(quickType,nom);
+  }
+}
+
+function hideCommuneSuggest() {
+  const box=document.getElementById('commune-suggest');
+  if(box) box.style.display='none';
 }
 
 async function confirmAdd() {
@@ -889,11 +946,24 @@ function cancelAdd() {
   document.getElementById('quick-add').classList.remove('show');
   quickLat=null; quickLng=null;
   document.getElementById('qa-editing-id').value='';
+  document.getElementById('qa-editing-commune').value='';
   document.getElementById('qa-title').textContent='Nouveau point d\'eau';
   document.getElementById('qa-submit-btn').textContent='✓ Enregistrer le point d\'eau';
 }
 
 // ── DETAIL ────────────────────────────────────────────────────────────────────
+function goToHydrant(id,commune) {
+  const h=hydrants.find(x=>x.id===id && (commune===undefined||commune===''||x.commune===commune));
+  if(!h) return;
+  goTab('map');
+  setTimeout(()=>{
+    if(h.lat&&h.lng){
+      mapObj.setView([h.lat,h.lng],17);
+    }
+    showDetail(id,commune);
+  },350);
+}
+
 function showDetail(id,commune) {
   const h=hydrants.find(x=>x.id===id && (commune===undefined||x.commune===commune)); if(!h) return;
   const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
@@ -980,6 +1050,7 @@ function editH(id,commune) {
   document.getElementById('qa-id').value = h.id;
   document.getElementById('qa-addr').value = h.addr;
   document.getElementById('qa-commune').value = h.commune||'';
+  hideCommuneSuggest();
   document.getElementById('qa-diam').value = h.diam;
   document.getElementById('qa-pres').value = h.pres||'';
   document.getElementById('qa-notes').value = '';
@@ -1079,28 +1150,30 @@ function renderList() {
   if(myLat){list.forEach(h=>h._d=(h.lat&&h.lng)?haversine(myLat,myLng,h.lat,h.lng):Infinity);}
   const c=document.getElementById('h-list');
   if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>Aucun résultat</p></div>`;return;}
-  // Group by commune
+  // Group by commune (normalized to merge case/accent/spacing variants)
   const groups={};
+  const labels={};
   list.forEach(h=>{
-    const com=h.commune||'Non renseignée';
-    if(!groups[com]) groups[com]=[];
-    groups[com].push(h);
+    const raw=(h.commune||'Non renseignée').trim();
+    const key=normalizeCommune(raw)||'NON RENSEIGNEE';
+    if(!groups[key]){groups[key]=[];labels[key]=raw.toUpperCase();}
+    groups[key].push(h);
   });
   // Sort communes alphabetically, sort hydrants within each by distance if available
   const communes=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'fr'));
-  c.innerHTML=communes.map(com=>{
-    const items=groups[com];
+  c.innerHTML=communes.map(key=>{
+    const items=groups[key];
     if(myLat) items.sort((a,b)=>a._d-b._d);
     const rows=items.map(h=>{
       const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
       const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
-      return `<div class="h-item" onclick="goTab('map');setTimeout(()=>showDetail('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}'),300)">
+      return `<div class="h-item" onclick="goToHydrant('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}')">
         <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
         <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
         <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>
       </div>`;
     }).join('');
-    return `<div class="commune-header">📍 ${com} <span class="commune-count">${items.length}</span></div>${rows}`;
+    return `<div class="commune-header">📍 ${labels[key]} <span class="commune-count">${items.length}</span></div>${rows}`;
   }).join('');
 }
 
@@ -1117,7 +1190,23 @@ async function loadAdminData() {
         ${currentUser.role==='admin'?`<button onclick="delUser(${u.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">🗑</button>`:''}
       </div>`).join('');
   } catch(e){document.getElementById('admin-users').innerHTML='Erreur: '+e.message;}
+  loadHsPoteaux();
   await loadAnomalies();
+}
+
+function loadHsPoteaux() {
+  const box=document.getElementById('admin-hs');
+  if(!box) return;
+  const hs=hydrants.filter(h=>!h.ok);
+  if(!hs.length){box.innerHTML='<div style="color:var(--gray-400);font-size:13px">Aucun point d\'eau hors service ✓</div>';return;}
+  // Sort by commune then id
+  hs.sort((a,b)=>normalizeCommune(a.commune).localeCompare(normalizeCommune(b.commune),'fr')||a.id.localeCompare(b.id));
+  box.innerHTML=hs.map(h=>`
+    <div class="an-row" onclick="goToHydrant('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}')" style="cursor:pointer">
+      <div class="an-top"><div class="an-name">🔴 ${h.id}</div><div class="st-chip st-ec">✕ Hors service</div></div>
+      <div class="an-meta">${h.addr||''}${h.commune?' • '+h.commune.toUpperCase():''}</div>
+      <div class="an-meta" style="color:var(--blue)">📍 Appuyez pour localiser</div>
+    </div>`).join('');
 }
 
 async function loadAnomalies() {

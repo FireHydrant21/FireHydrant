@@ -1,4 +1,4 @@
-<!-- FireHydrant v5.0 - 2026-06-23 - communes dropdown + HS gestion + clic-localise -->
+<!-- FireHydrant v5.2 - 2026-06-29 - fix affichage (valeurs vides, separateurs) + auteur poteau -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -385,7 +385,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <svg viewBox="0 0 24 24"><path d="M12 2L19 21 12 17 5 21z" fill="currentColor" stroke="none"/></svg>
       Itinéraire<div class="dot"></div>
     </button>
-    <button class="nav-btn" id="nav-add-tab" onclick="toggleAdd();goTab('map')">
+    <button class="nav-btn" id="nav-add-tab" onclick="startAddMode()">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
       Ajouter<div class="dot"></div>
     </button>
@@ -562,10 +562,10 @@ async function deleteHydrant(id,commune) {
 async function getUsers() { return dbFetch('utilisateurs?select=*&order=prenom'); }
 
 function toH(d) {
-  return {id:d.identifiant,type:d.type,addr:d.adresse,commune:d.commune,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,capacite:d.capacite,photo_url:d.photo_url};
+  return {id:d.identifiant,type:d.type,addr:d.adresse,commune:d.commune,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,ajoutePar:d.ajoute_par,capacite:d.capacite,photo_url:d.photo_url};
 }
 function toDb(h) {
-  return {identifiant:h.id,type:h.type,adresse:h.addr,commune:h.commune||'',diametre:h.diam,pression:h.pres||'',etat:h.ok,notes:h.notes||'',latitude:h.lat,longitude:h.lng,date_ajout:h.added||new Date().toLocaleDateString('fr-FR'),capacite:h.capacite||'',photo_url:h.photo_url||''};
+  return {identifiant:h.id,type:h.type,adresse:h.addr,commune:h.commune||'',diametre:h.diam,pression:h.pres||'',etat:h.ok,notes:h.notes||'',latitude:h.lat,longitude:h.lng,date_ajout:h.added||new Date().toLocaleDateString('fr-FR'),ajoute_par:h.ajoutePar||'',capacite:h.capacite||'',photo_url:h.photo_url||''};
 }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
@@ -662,7 +662,7 @@ function renderMarkers() {
   Object.keys(markers).forEach(k=>delete markers[k]);
   hydrants.forEach(h=>{
     if(!h.lat||!h.lng) return;
-    const m=L.marker([h.lat,h.lng],{icon:makeIcon(h,h.id===nearestId)});
+    const m=L.marker([h.lat,h.lng],{icon:makeIcon(h,(h.id+'|'+(h.commune||''))===nearestId)});
     m.on('click',()=>{if(!addMode) showDetail(h.id,h.commune);});
     m.addTo(mapObj); markers[h.id+'|'+(h.commune||'')]=m;
   });
@@ -742,6 +742,15 @@ function toggleAdd() {
   document.getElementById('btn-add').classList.toggle('on',addMode);
   document.getElementById('add-hint').classList.toggle('show',addMode);
   mapObj.getContainer().style.cursor=addMode?'crosshair':'';
+}
+
+function startAddMode() {
+  goTab('map');
+  // goTab('map') ferme tout via closeAll(); on active ensuite le mode ajout proprement
+  setTimeout(()=>{
+    if(!addMode) toggleAdd();
+    showToast('📍 Touchez la carte pour placer le point d\'eau');
+  },100);
 }
 
 function onMapClick(e) {
@@ -890,7 +899,9 @@ async function confirmAdd() {
   const capVal=document.getElementById('qa-cap-val').value;
   const cap=capVal?(capVal+' '+document.getElementById('qa-cap-unit').value):'';
   const photoExisting = document.getElementById('qa-photo-img').src && document.getElementById('qa-photo-prev').style.display==='block' ? document.getElementById('qa-photo-img').src : '';
-  const h={id,type:quickType,addr,commune,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
+  const origAuthor = isEdit ? (hydrants.find(x=>x.id===editingId && x.commune===editingCommune)?.ajoutePar) : null;
+  const ajoutePar = isEdit ? (origAuthor||'') : ((currentUser&&currentUser.nom)||'Inconnu');
+  const h={id,type:quickType,addr,commune,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,ajoutePar,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
   cancelAdd();
   if(addMode) toggleAdd();
   showToast('⏳ Enregistrement...');
@@ -966,25 +977,28 @@ function goToHydrant(id,commune) {
 
 function showDetail(id,commune) {
   const h=hydrants.find(x=>x.id===id && (commune===undefined||x.commune===commune)); if(!h) return;
+  // Ferme le bandeau "le plus proche" s'il était ouvert
+  document.getElementById('nearest-banner').classList.remove('show');
   const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
   const crowDist=myLat&&h.lat?fmtDist(haversine(myLat,myLng,h.lat,h.lng)):null;
   const comSafe=(h.commune||'').replace(/'/g,"\\'");
   document.getElementById('detail-body').innerHTML=`
     <div class="sheet-hdr">
       <div class="sheet-icon" style="background:${h.ok?'var(--green-light)':'var(--red-light)'}">${e}</div>
-      <div><div class="sheet-title">${h.id}</div><div class="sheet-sub">${h.addr}${h.commune?' • '+h.commune:''}</div></div>
+      <div><div class="sheet-title">${h.id}</div><div class="sheet-sub">${h.addr||'Adresse non renseignée'}${h.commune?' • '+h.commune:''}</div></div>
     </div>
     ${h.photo_url?`<img src="${h.photo_url}" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);margin-bottom:14px" onclick="window.open('${h.photo_url}','_blank')"/>`:''}
     ${crowDist?`<div class="dist-box" id="db-${id}">⏳ Calcul distance par la route...</div>`:''}
     <div class="grid2">
       <div class="field"><label>Type</label><span>${cap(h.type)}</span></div>
-      <div class="field"><label>Diamètre</label><span>${h.diam}</span></div>
+      <div class="field"><label>Diamètre</label><span>${h.diam||'—'}</span></div>
       <div class="field"><label>Pression</label><span>${h.pres?h.pres+' bar':'—'}</span></div>
       <div class="field"><label>État</label><span class="${h.ok?'badge-ok':'badge-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
       ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
     </div>
     ${h.notes?`<div class="notes-box" id="notes-box-${h.id}">📝 ${h.notes}<button onclick="clearNotes('${h.id}','${comSafe}')" style="display:block;margin-top:6px;background:transparent;border:none;color:#92400E;text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:''}
     <div id="anom-list-${h.id}" style="margin-bottom:14px"></div>
+    ${((currentUser&&(currentUser.role==='admin'||currentUser.role==='gestionnaire'))&&(h.ajoutePar||h.added))?`<div style="font-size:12px;color:var(--gray-400);margin:4px 0 14px;text-align:center;padding-top:10px;border-top:1px solid var(--gray-100)">${h.ajoutePar?'👤 Ajouté par <strong>'+h.ajoutePar+'</strong>':''}${h.ajoutePar&&h.added?' · ':''}${h.added||''}</div>`:''}
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
     <button class="btn-s" onclick="editH('${h.id}','${comSafe}')">✏️ Modifier</button>
     <button class="btn-d" onclick="delH('${h.id}','${comSafe}')">🗑 Supprimer</button>
@@ -1102,7 +1116,9 @@ async function findNearest() {
     const d=await getRoadDist(myLat,myLng,h.lat,h.lng);
     if(d!==null&&(bestDist===null||d<bestDist)){bestDist=d;best=h;}
   }
-  nearestId=best.id; renderMarkers();
+  // Si une fiche a été ouverte entre-temps, ne pas afficher le bandeau
+  if(document.getElementById('detail-sheet').classList.contains('show')) return;
+  nearestId=best.id+'|'+(best.commune||''); renderMarkers();
   mapObj.setView([best.lat,best.lng],16);
   document.getElementById('nb-name').textContent=best.id+' — '+best.addr;
   document.getElementById('nb-chips').innerHTML=`<div class="chip b">${bestDist?'🚗 '+fmtDist(bestDist):'⚠️ Distance indisponible'}</div><div class="chip">🔧 ${best.diam}</div><div class="chip g">✓ Opérationnel</div>`;
@@ -1123,7 +1139,7 @@ async function autoHighlight() {
   if(!ops.length) return;
   ops.forEach(h=>h._crow=haversine(myLat,myLng,h.lat,h.lng));
   ops.sort((a,b)=>a._crow-b._crow);
-  nearestId=ops[0].id; renderMarkers();
+  nearestId=ops[0].id+'|'+(ops[0].commune||''); renderMarkers();
 }
 
 function closeAll() {
@@ -1169,7 +1185,7 @@ function renderList() {
       const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
       return `<div class="h-item" onclick="goToHydrant('${h.id}','${(h.commune||'').replace(/'/g,"\\'")}')">
         <div class="h-icon ${h.ok?'ok':'hs'}">${e}</div>
-        <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr}</div></div>
+        <div class="h-info"><div class="h-name">${h.id}</div><div class="h-addr">${h.addr||'—'}</div></div>
         <div class="h-meta"><div class="h-status ${h.ok?'ok':'hs'}">${h.ok?'✓ OK':'✕ HS'}</div>${dist?`<div class="h-dist">📍 ${dist}</div>`:''}</div>
       </div>`;
     }).join('');
@@ -1218,8 +1234,8 @@ async function loadAnomalies() {
     box.innerHTML = anoms.map(a=>`
       <div class="an-row">
         <div class="an-top"><div class="an-name">${a.poteau_id||'—'}</div><div class="st-chip ${a.statut==='en_cours'?'st-ec':'st-rs'}">${a.statut==='en_cours'?'⚠️ En cours':'✅ Résolu'}</div></div>
-        <div class="an-meta">${a.poteau_addr||''} • ${a.type_anomalie||''}</div>
-        <div class="an-meta">${a.signale_par||''} • ${a.created_at?new Date(a.created_at).toLocaleDateString('fr-FR'):''}</div>
+        <div class="an-meta">${[a.poteau_addr,a.type_anomalie].filter(Boolean).join(' • ')}</div>
+        <div class="an-meta">${[a.signale_par,a.created_at?new Date(a.created_at).toLocaleDateString('fr-FR'):''].filter(Boolean).join(' • ')}</div>
         <div style="display:flex;gap:6px;margin-top:6px;">
           ${a.statut==='en_cours'?`<button onclick="resolveAnom(${a.id})" style="flex:1;background:var(--green-light);color:var(--green);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">✅ Résolu</button>`:''}
           <button onclick="delAnom(${a.id})" style="flex:1;background:var(--red-light);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px">🗑 Supprimer</button>

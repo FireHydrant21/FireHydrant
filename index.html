@@ -68,7 +68,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #overlay.show{display:block}
 
 /* SHEETS */
-.sheet{position:absolute;bottom:0;left:0;right:0;z-index:600;background:var(--white);border-radius:18px 18px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:80%;overflow-y:auto}
+.sheet{position:absolute;bottom:0;left:0;right:0;z-index:700;background:var(--white);border-radius:18px 18px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:80%;overflow-y:auto}
 .sheet.show{transform:translateY(0)}
 .sheet-handle{width:36px;height:4px;background:var(--gray-200);border-radius:2px;margin:12px auto 0}
 .sheet-body{padding:14px 16px 24px}
@@ -83,7 +83,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .badge-ok{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:var(--green-light);color:var(--green)}
 .badge-hs{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:var(--red-light);color:var(--red)}
 .dist-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;color:var(--blue);font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.notes-box{background:var(--orange-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:#92400E;margin-bottom:14px}
+.notes-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--blue);margin-bottom:14px}
 .btn-p{width:100%;padding:13px;background:var(--red);color:white;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent}
 .btn-p:active{background:var(--red-dark)}
 .btn-s{width:100%;padding:11px;background:var(--gray-100);color:var(--gray-800);border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;-webkit-tap-highlight-color:transparent}
@@ -895,7 +895,7 @@ async function confirmAdd() {
   const isEdit = !!editingId;
   if(!isEdit && hydrants.find(h=>h.id===id && h.commune===commune)){showToast('Cet identifiant existe déjà pour '+commune+' — choisissez-en un autre');return;}
   const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
-  const notes=[anoms.length?'⚠️ Anomalies: '+anoms.join(', '):'',document.getElementById('qa-notes').value.trim()].filter(Boolean).join(' | ');
+  const notes=document.getElementById('qa-notes').value.trim();
   const capVal=document.getElementById('qa-cap-val').value;
   const cap=capVal?(capVal+' '+document.getElementById('qa-cap-unit').value):'';
   const photoExisting = document.getElementById('qa-photo-img').src && document.getElementById('qa-photo-prev').style.display==='block' ? document.getElementById('qa-photo-img').src : '';
@@ -996,7 +996,7 @@ function showDetail(id,commune) {
       <div class="field"><label>État</label><span class="${h.ok?'badge-ok':'badge-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
       ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
     </div>
-    ${h.notes?`<div class="notes-box" id="notes-box-${h.id}">📝 ${h.notes}<button onclick="clearNotes('${h.id}','${comSafe}')" style="display:block;margin-top:6px;background:transparent;border:none;color:#92400E;text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:''}
+    ${(()=>{const cn=cleanNote(h.notes);return cn?`<div class="notes-box" id="notes-box-${h.id}">📝 <strong>Note :</strong> ${cn}<button onclick="clearNotes('${h.id}','${comSafe}')" style="display:block;margin-top:6px;background:transparent;border:none;color:var(--blue);text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:'';})()}
     <div id="anom-list-${h.id}" style="margin-bottom:14px"></div>
     ${((currentUser&&(currentUser.role==='admin'||currentUser.role==='gestionnaire'))&&(h.ajoutePar||h.added))?`<div style="font-size:12px;color:var(--gray-400);margin:4px 0 14px;text-align:center;padding-top:10px;border-top:1px solid var(--gray-100)">${h.ajoutePar?'👤 Ajouté par <strong>'+h.ajoutePar+'</strong>':''}${h.ajoutePar&&h.added?' · ':''}${h.added||''}</div>`:''}
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
@@ -1052,6 +1052,7 @@ async function delAnomFromDetail(id,hid) {
 
 function closeDetail() {
   document.getElementById('detail-sheet').classList.remove('show');
+  document.getElementById('nearest-banner').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
 }
 
@@ -1332,6 +1333,13 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'),2500);
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function cleanNote(notes){
+  if(!notes) return '';
+  // Retire l'ancien bloc "⚠️ Anomalies: ..." généré automatiquement avant
+  let parts=notes.split('|').map(s=>s.trim());
+  parts=parts.filter(p=>p && !/^⚠️?\s*Anomalies?\s*:/i.test(p));
+  return parts.join(' | ').trim();
+}
 function updateBadge(){const n=hydrants.length;document.getElementById('count-badge').textContent=n+(n>1?' points':' point');}
 
 // ── START ─────────────────────────────────────────────────────────────────────

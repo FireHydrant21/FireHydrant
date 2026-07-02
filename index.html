@@ -1,4 +1,4 @@
-<!-- FireHydrant v5.2 - 2026-06-29 - fix affichage (valeurs vides, separateurs) + auteur poteau -->
+<!-- FireHydrant v5.3 - 2026-06-29 - fix collision dbId + tri commune/id + Bouche -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -325,7 +325,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <div class="fchip" onclick="setFilter('ok',this)">✓ Opérationnel</div>
         <div class="fchip" onclick="setFilter('hs',this)">✕ Hors service</div>
         <div class="fchip" onclick="setFilter('poteau',this)">Poteau</div>
-        <div class="fchip" onclick="setFilter('borne',this)">Borne</div>
+        <div class="fchip" onclick="setFilter('borne',this)">Bouche</div>
         <div class="fchip" onclick="setFilter('reservoir',this)">Réservoir</div>
       </div>
       <div id="h-list"></div>
@@ -411,13 +411,14 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <h2 id="qa-title">Nouveau point d'eau</h2>
   </div>
   <div class="qa-body">
+    <input type="hidden" id="qa-editing-dbid" value=""/>
     <input type="hidden" id="qa-editing-id" value=""/>
     <input type="hidden" id="qa-editing-commune" value=""/>
     <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px" id="qa-coord"></div>
     <div class="qa-sec">Type de point d'eau</div>
     <div class="type-grid">
       <button class="type-btn" id="qt-poteau" onclick="selType('poteau',this)"><span class="ti">🔴</span>Poteau</button>
-      <button class="type-btn" id="qt-borne" onclick="selType('borne',this)"><span class="ti">💧</span>Borne</button>
+      <button class="type-btn" id="qt-borne" onclick="selType('borne',this)"><span class="ti">💧</span>Bouche</button>
       <button class="type-btn" id="qt-reservoir" onclick="selType('reservoir',this)"><span class="ti">🏊</span>Réservoir</button>
     </div>
     <div class="qa-sec">Identifiant</div>
@@ -548,21 +549,27 @@ async function dbFetch(path, opts={}) {
   return t ? JSON.parse(t) : null;
 }
 async function getHydrants() { return dbFetch('poteaux?select=*&order=identifiant'); }
-async function insertHydrant(h) { return dbFetch('poteaux',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(h)}); }
+async function insertHydrant(h) { return dbFetch('poteaux',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(h)}); }
 async function updateHydrant(id,h,commune) { 
   let q='poteaux?identifiant=eq.'+encodeURIComponent(id);
   if(commune!==undefined && commune!==null) q+='&commune=eq.'+encodeURIComponent(commune);
   return dbFetch(q,{method:'PATCH',body:JSON.stringify(h)}); 
+}
+async function updateHydrantById(dbId,h) {
+  return dbFetch('poteaux?id=eq.'+encodeURIComponent(dbId),{method:'PATCH',body:JSON.stringify(h)});
 }
 async function deleteHydrant(id,commune) { 
   let q='poteaux?identifiant=eq.'+encodeURIComponent(id);
   if(commune!==undefined && commune!==null) q+='&commune=eq.'+encodeURIComponent(commune);
   return dbFetch(q,{method:'DELETE'}); 
 }
+async function deleteHydrantById(dbId) {
+  return dbFetch('poteaux?id=eq.'+encodeURIComponent(dbId),{method:'DELETE'});
+}
 async function getUsers() { return dbFetch('utilisateurs?select=*&order=prenom'); }
 
 function toH(d) {
-  return {id:d.identifiant,type:d.type,addr:d.adresse,commune:d.commune,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,ajoutePar:d.ajoute_par,capacite:d.capacite,photo_url:d.photo_url};
+  return {dbId:d.id,id:d.identifiant,type:d.type,addr:d.adresse,commune:d.commune,diam:d.diametre,pres:d.pression,ok:d.etat,notes:d.notes,lat:d.latitude,lng:d.longitude,added:d.date_ajout,ajoutePar:d.ajoute_par,capacite:d.capacite,photo_url:d.photo_url};
 }
 function toDb(h) {
   return {identifiant:h.id,type:h.type,adresse:h.addr,commune:h.commune||'',diametre:h.diam,pression:h.pres||'',etat:h.ok,notes:h.notes||'',latitude:h.lat,longitude:h.lng,date_ajout:h.added||new Date().toLocaleDateString('fr-FR'),ajoute_par:h.ajoutePar||'',capacite:h.capacite||'',photo_url:h.photo_url||''};
@@ -890,29 +897,31 @@ async function confirmAdd() {
   const addr=document.getElementById('qa-addr').value.trim()||quickLat.toFixed(4)+', '+quickLng.toFixed(4);
   const commune=document.getElementById('qa-commune').value.trim()||'Non renseignée';
   if(!id){showToast('Renseignez un identifiant');return;}
+  const editingDbId = document.getElementById('qa-editing-dbid').value;
   const editingId = document.getElementById('qa-editing-id').value;
   const editingCommune = document.getElementById('qa-editing-commune').value;
-  const isEdit = !!editingId;
+  const isEdit = !!editingDbId;
   if(!isEdit && hydrants.find(h=>h.id===id && h.commune===commune)){showToast('Cet identifiant existe déjà pour '+commune+' — choisissez-en un autre');return;}
   const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
   const notes=document.getElementById('qa-notes').value.trim();
   const capVal=document.getElementById('qa-cap-val').value;
   const cap=capVal?(capVal+' '+document.getElementById('qa-cap-unit').value):'';
   const photoExisting = document.getElementById('qa-photo-img').src && document.getElementById('qa-photo-prev').style.display==='block' ? document.getElementById('qa-photo-img').src : '';
-  const origAuthor = isEdit ? (hydrants.find(x=>x.id===editingId && x.commune===editingCommune)?.ajoutePar) : null;
+  const origHydrant = isEdit ? hydrants.find(x=>x.dbId==editingDbId) : null;
+  const origAuthor = origHydrant ? origHydrant.ajoutePar : null;
   const ajoutePar = isEdit ? (origAuthor||'') : ((currentUser&&currentUser.nom)||'Inconnu');
-  const h={id,type:quickType,addr,commune,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,ajoutePar,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
+  const h={dbId:editingDbId||null,id,type:quickType,addr,commune,diam:document.getElementById('qa-diam').value,pres:document.getElementById('qa-pres').value,ok:quickEtat==='ok',notes,capacite:cap,lat:quickLat,lng:quickLng,ajoutePar,photo_url:isEdit?(photoExisting.startsWith('http')?photoExisting:''):''};
   cancelAdd();
   if(addMode) toggleAdd();
   showToast('⏳ Enregistrement...');
   try {
     const photoFile=document.getElementById('qa-photo').files[0] || document.getElementById('qa-photo-gallery').files[0];
     if(isEdit) {
-      await updateHydrant(editingId, toDb(h), editingCommune);
+      await updateHydrantById(editingDbId, toDb(h));
       if(photoFile) {
         showToast('📷 Upload photo...');
         const url=await uploadPhoto(photoFile,h.id);
-        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url},h.commune);}
+        if(url){h.photo_url=url; await updateHydrantById(editingDbId,{photo_url:url});}
       }
       if(anoms.length) {
         showToast('⏳ Enregistrement anomalies...');
@@ -924,15 +933,17 @@ async function confirmAdd() {
           }
         }
       }
-      const i = hydrants.findIndex(x=>x.id===editingId && x.commune===editingCommune);
+      const i = hydrants.findIndex(x=>x.dbId==editingDbId);
       if(i>=0) hydrants[i] = h;
       showToast('✓ '+h.id+' modifié !');
     } else {
-      await insertHydrant(toDb(h));
+      const inserted = await insertHydrant(toDb(h));
+      // Récupère le dbId réel généré par Supabase
+      if(inserted && inserted[0] && inserted[0].id) h.dbId = inserted[0].id;
       if(photoFile) {
         showToast('📷 Upload photo...');
         const url=await uploadPhoto(photoFile,h.id);
-        if(url){h.photo_url=url; await updateHydrant(h.id,{photo_url:url},h.commune);}
+        if(url && h.dbId){h.photo_url=url; await updateHydrantById(h.dbId,{photo_url:url});}
       }
       if(anoms.length) {
         showToast('⏳ Enregistrement anomalies...');
@@ -956,6 +967,7 @@ async function confirmAdd() {
 function cancelAdd() {
   document.getElementById('quick-add').classList.remove('show');
   quickLat=null; quickLng=null;
+  document.getElementById('qa-editing-dbid').value='';
   document.getElementById('qa-editing-id').value='';
   document.getElementById('qa-editing-commune').value='';
   document.getElementById('qa-title').textContent='Nouveau point d\'eau';
@@ -990,18 +1002,18 @@ function showDetail(id,commune) {
     ${h.photo_url?`<img src="${h.photo_url}" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);margin-bottom:14px" onclick="window.open('${h.photo_url}','_blank')"/>`:''}
     ${crowDist?`<div class="dist-box" id="db-${id}">⏳ Calcul distance par la route...</div>`:''}
     <div class="grid2">
-      <div class="field"><label>Type</label><span>${cap(h.type)}</span></div>
+      <div class="field"><label>Type</label><span>${typeLabel(h.type)}</span></div>
       <div class="field"><label>Diamètre</label><span>${h.diam||'—'}</span></div>
       <div class="field"><label>Pression</label><span>${h.pres?h.pres+' bar':'—'}</span></div>
       <div class="field"><label>État</label><span class="${h.ok?'badge-ok':'badge-hs'}">${h.ok?'✓ Opérationnel':'✕ Hors service'}</span></div>
       ${h.capacite?`<div class="field" style="grid-column:span 2"><label>Capacité</label><span>🏊 ${h.capacite}</span></div>`:''}
     </div>
-    ${(()=>{const cn=cleanNote(h.notes);return cn?`<div class="notes-box" id="notes-box-${h.id}">📝 <strong>Note :</strong> ${cn}<button onclick="clearNotes('${h.id}','${comSafe}')" style="display:block;margin-top:6px;background:transparent;border:none;color:var(--blue);text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:'';})()}
+    ${(()=>{const cn=cleanNote(h.notes);return cn?`<div class="notes-box" id="notes-box-${h.id}">📝 <strong>Note :</strong> ${cn}<button onclick="clearNotes('${h.dbId}','${h.id}')" style="display:block;margin-top:6px;background:transparent;border:none;color:var(--blue);text-decoration:underline;font-size:12px;cursor:pointer;padding:0">Effacer cette note</button></div>`:'';})()}
     <div id="anom-list-${h.id}" style="margin-bottom:14px"></div>
     ${((currentUser&&(currentUser.role==='admin'||currentUser.role==='gestionnaire'))&&(h.ajoutePar||h.added))?`<div style="font-size:12px;color:var(--gray-400);margin:4px 0 14px;text-align:center;padding-top:10px;border-top:1px solid var(--gray-100)">${h.ajoutePar?'👤 Ajouté par <strong>'+h.ajoutePar+'</strong>':''}${h.ajoutePar&&h.added?' · ':''}${h.added||''}</div>`:''}
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
-    <button class="btn-s" onclick="editH('${h.id}','${comSafe}')">✏️ Modifier</button>
-    <button class="btn-d" onclick="delH('${h.id}','${comSafe}')">🗑 Supprimer</button>
+    <button class="btn-s" onclick="editHById('${h.dbId}')">✏️ Modifier</button>
+    <button class="btn-d" onclick="delHById('${h.dbId}','${(h.id||'').replace(/'/g,"\\'")}')">🗑 Supprimer</button>
   `;
   document.getElementById('overlay').classList.add('show');
   document.getElementById('detail-sheet').classList.add('show');
@@ -1029,11 +1041,11 @@ async function loadHydrantAnomalies(hid) {
   } catch(e) { box.innerHTML=''; }
 }
 
-async function clearNotes(hid,commune) {
+async function clearNotes(dbId,hid) {
   if(!confirm('Effacer cette note ?')) return;
   try {
-    await updateHydrant(hid,{notes:''},commune);
-    const i = hydrants.findIndex(h=>h.id===hid && (commune===undefined||commune===''||h.commune===commune));
+    await updateHydrantById(dbId,{notes:''});
+    const i = hydrants.findIndex(h=>String(h.dbId)===String(dbId));
     if(i>=0) hydrants[i].notes = '';
     showToast('✓ Note effacée');
     const box = document.getElementById('notes-box-'+hid);
@@ -1056,8 +1068,14 @@ function closeDetail() {
   document.getElementById('overlay').classList.remove('show');
 }
 
-function editH(id,commune) {
-  const h = hydrants.find(x=>x.id===id && (commune===undefined||commune===''||x.commune===commune));
+function editHById(dbId) {
+  const h = hydrants.find(x=>String(x.dbId)===String(dbId));
+  if(!h){ showToast('Point d\'eau introuvable'); return; }
+  editH(h.id, h.commune, h.dbId);
+}
+
+function editH(id,commune,dbId) {
+  const h = dbId!==undefined ? hydrants.find(x=>String(x.dbId)===String(dbId)) : hydrants.find(x=>x.id===id && (commune===undefined||commune===''||x.commune===commune));
   if(!h) return;
   closeAll();
   quickLat = h.lat; quickLng = h.lng;
@@ -1085,11 +1103,22 @@ function editH(id,commune) {
     document.getElementById('qa-photo-img').src = h.photo_url;
     document.getElementById('qa-photo-prev').style.display = 'block';
   }
+  document.getElementById('qa-editing-dbid').value = h.dbId||'';
   document.getElementById('qa-editing-id').value = h.id;
   document.getElementById('qa-editing-commune').value = h.commune||'';
   document.getElementById('qa-title').textContent = 'Modifier le point d\'eau';
   document.getElementById('qa-submit-btn').textContent = '✓ Enregistrer les modifications';
   document.getElementById('quick-add').classList.add('show');
+}
+
+async function delHById(dbId,label) {
+  if(!confirm('Supprimer ce point d\'eau'+(label?' ('+label+')':'')+' ?')) return;
+  try {
+    await deleteHydrantById(dbId);
+    hydrants=hydrants.filter(h=>String(h.dbId)!==String(dbId));
+    updateBadge(); renderMarkers(); renderList(); closeAll();
+    showToast('✓ Supprimé');
+  } catch(e){showToast('❌ Erreur');}
 }
 
 async function delH(id,commune) {
@@ -1176,11 +1205,12 @@ function renderList() {
     if(!groups[key]){groups[key]=[];labels[key]=raw.toUpperCase();}
     groups[key].push(h);
   });
-  // Sort communes alphabetically, sort hydrants within each by distance if available
+  // Tri des communes par ordre alphabétique croissant
   const communes=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'fr'));
   c.innerHTML=communes.map(key=>{
     const items=groups[key];
-    if(myLat) items.sort((a,b)=>a._d-b._d);
+    // Tri des poteaux par identifiant croissant (PI-001, PI-002...)
+    items.sort((a,b)=>a.id.localeCompare(b.id,'fr',{numeric:true}));
     const rows=items.map(h=>{
       const e=h.type==='poteau'?'🔴':h.type==='borne'?'💧':'🏊';
       const dist=myLat&&h.lat&&h._d!==Infinity?fmtDist(h._d):'';
@@ -1333,6 +1363,7 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'),2500);
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function typeLabel(t){return t==='poteau'?'Poteau':t==='borne'?'Bouche':t==='reservoir'?'Réservoir':cap(t);}
 function cleanNote(notes){
   if(!notes) return '';
   // Retire l'ancien bloc "⚠️ Anomalies: ..." généré automatiquement avant

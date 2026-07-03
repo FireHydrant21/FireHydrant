@@ -1,4 +1,4 @@
-<!-- FireHydrant v5.3 - 2026-06-29 - fix collision dbId + tri commune/id + Bouche -->
+<!-- FireHydrant v5.4 - 2026-07-03 - anti-doublon commune normalisee + deplacer poteau -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -61,6 +61,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .map-btn.on{background:var(--red);color:white}
 #add-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:500;background:var(--red);color:white;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;display:none;white-space:nowrap}
 #add-hint.show{display:block}
+#move-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:500;background:#7C3AED;color:white;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;display:none;white-space:nowrap}
+#move-hint.show{display:block}
 #legend{position:absolute;bottom:10px;left:10px;z-index:500;background:rgba(255,255,255,.95);border-radius:var(--radius-sm);padding:8px 10px;font-size:11px;color:var(--gray-600);display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow-sm)}
 .leg-row{display:flex;align-items:center;gap:6px}
 .leg-dot{width:11px;height:11px;border-radius:50%;border:2px solid white;box-shadow:0 0 0 1px rgba(0,0,0,.15);flex-shrink:0}
@@ -293,6 +295,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         </button>
       </div>
       <div id="add-hint">📍 Tapez sur la carte pour placer un point d'eau</div>
+      <div id="move-hint">📍 Touchez le nouvel emplacement · <span onclick="cancelMove()" style="text-decoration:underline;cursor:pointer">Annuler</span></div>
       <div id="legend">
         <div class="leg-row"><div class="leg-dot" style="background:#16A34A"></div><span>Opérationnel</span></div>
         <div class="leg-row"><div class="leg-dot" style="background:#DC2626"></div><span>Hors service</span></div>
@@ -543,6 +546,7 @@ let mapObj, meMarker;
 const markers = {};
 let searchTimeout = null;
 let searchMarker = null;
+let moveDbId = null;
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 async function dbFetch(path, opts={}) {
@@ -771,6 +775,11 @@ function startAddMode() {
 }
 
 function onMapClick(e) {
+  // Mode déplacement : repositionne le poteau sélectionné
+  if(moveDbId!==null) {
+    finishMove(e.latlng.lat, e.latlng.lng);
+    return;
+  }
   if(!addMode) return;
   quickLat=e.latlng.lat; quickLng=e.latlng.lng; quickType=null; quickEtat='ok';
   document.getElementById('qa-editing-id').value='';
@@ -857,8 +866,11 @@ function genId(type,commune) {
   const p=type==='poteau'?'PI':type==='borne'?'BI':'RI';
   const nc=normalizeCommune(commune);
   const scoped = nc ? hydrants.filter(h=>h.type===type && normalizeCommune(h.commune)===nc) : hydrants.filter(h=>h.type===type);
-  const nums=scoped.map(h=>parseInt((h.id.split('-')[1])||0));
-  return p+'-'+String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
+  const used = new Set(scoped.map(h=>parseInt((h.id.split('-')[1])||0)));
+  // Cherche le plus petit numéro libre au-dessus du max (évite les collisions)
+  let n = (used.size ? Math.max(...used) : 0) + 1;
+  while(used.has(n)) n++;
+  return p+'-'+String(n).padStart(3,'0');
 }
 
 let communeSearchTimer=null;
@@ -911,7 +923,10 @@ async function confirmAdd() {
   const editingId = document.getElementById('qa-editing-id').value;
   const editingCommune = document.getElementById('qa-editing-commune').value;
   const isEdit = !!editingDbId;
-  if(!isEdit && hydrants.find(h=>h.id===id && h.commune===commune)){showToast('Cet identifiant existe déjà pour '+commune+' — choisissez-en un autre');return;}
+  const nc=normalizeCommune(commune);
+  if(!isEdit && hydrants.find(h=>h.id===id && normalizeCommune(h.commune)===nc)){showToast('⚠️ '+id+' existe déjà pour '+commune+' ! Changez le numéro.');return;}
+  // Sécurité supplémentaire : re-générer un ID libre si collision détectée
+  if(!isEdit && hydrants.find(h=>h.id===id && normalizeCommune(h.commune)===nc)){return;}
   const anoms=Array.from(document.querySelectorAll('#qa-anoms .anom-chip.sel')).map(c=>c.dataset.v);
   const notes=document.getElementById('qa-notes').value.trim();
   const capVal=document.getElementById('qa-cap-val').value;
@@ -1023,6 +1038,7 @@ function showDetail(id,commune) {
     ${((currentUser&&(currentUser.role==='admin'||currentUser.role==='gestionnaire'))&&(h.ajoutePar||h.added))?`<div style="font-size:12px;color:var(--gray-400);margin:4px 0 14px;text-align:center;padding-top:10px;border-top:1px solid var(--gray-100)">${h.ajoutePar?'👤 Ajouté par <strong>'+h.ajoutePar+'</strong>':''}${h.ajoutePar&&h.added?' · ':''}${h.added||''}</div>`:''}
     <button class="btn-p" onclick="navigate(${h.lat},${h.lng})">🧭 Naviguer</button>
     <button class="btn-s" onclick="editHById('${h.dbId}')">✏️ Modifier</button>
+    <button class="btn-s" onclick="startMove('${h.dbId}')">📍 Déplacer</button>
     <button class="btn-d" onclick="delHById('${h.dbId}','${(h.id||'').replace(/'/g,"\\'")}')">🗑 Supprimer</button>
   `;
   document.getElementById('overlay').classList.add('show');
@@ -1185,6 +1201,40 @@ async function autoHighlight() {
 function closeAll() {
   closeDetail(); closeNearest();
   if(addMode) toggleAdd();
+}
+
+function startMove(dbId) {
+  const h=hydrants.find(x=>String(x.dbId)===String(dbId));
+  if(!h){showToast('Point d\'eau introuvable');return;}
+  moveDbId=dbId;
+  closeAll();
+  goTab('map');
+  mapObj.setView([h.lat,h.lng],17);
+  showToast('📍 Touchez le nouvel emplacement de '+h.id);
+  document.getElementById('move-hint').classList.add('show');
+}
+
+function cancelMove() {
+  moveDbId=null;
+  document.getElementById('move-hint').classList.remove('show');
+  showToast('Déplacement annulé');
+}
+
+async function finishMove(lat,lng) {
+  const dbId=moveDbId;
+  moveDbId=null;
+  document.getElementById('move-hint').classList.remove('show');
+  const h=hydrants.find(x=>String(x.dbId)===String(dbId));
+  if(!h){showToast('Erreur');return;}
+  showToast('⏳ Déplacement...');
+  try {
+    await updateHydrantById(dbId,{latitude:lat,longitude:lng});
+    h.lat=lat; h.lng=lng;
+    renderMarkers(); renderList();
+    mapObj.setView([lat,lng],17);
+    showToast('✓ '+h.id+' déplacé !');
+    setTimeout(()=>showDetail(h.id,h.commune),400);
+  } catch(e){showToast('❌ Erreur: '+e.message);}
 }
 
 function navigate(lat,lng) { window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,'_blank'); }
